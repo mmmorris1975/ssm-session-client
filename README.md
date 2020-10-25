@@ -1,6 +1,6 @@
 # SSM Session Client
 A golang implementation of the protocol used with AWS SSM sessions.  The goal of this library is to provide an
-easy to digest way of handling AWS SSM sessions without needing to rely on the external
+easy to digest way of integrating AWS SSM sessions to Go code without needing to rely on the external
 [session manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
 
 Simple, single stream port forwarding is available through the `ssmclient.PortForwardingSession()` function.  This
@@ -10,5 +10,16 @@ to listen on).  See the [example](examples/port-forwarder) for a simple implemen
 
 ## TODO
   * Shell sessions (linux, and possibly windows)
-  * SSH over SSM sessions ()
+  * [SSH over SSM sessions](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
+(AWS-StartSSHSession document)
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
+
+## References
+The source code for the AWS SSM agent, which is a useful reference for grokking message formats, and the
+expected interaction with the various services of the agent.  
+https://github.com/aws/amazon-ssm-agent/tree/master/agent/session  
+The `contracts` directory contains definitions of the various types used for messaging, and the `plugins`, `shell`,
+and `datachannel` directories can be a useful reference for how the protocol works.
+
+The node.js library at https://github.com/bertrandmartel/aws-ssm-session was also very instructive for seeing
+and actual client-side implementation of the protocol for shell sessions.
