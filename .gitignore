@@ -22,3 +22,6 @@ vendor/
 .DS_Store
 
 *.lock
+
+# compiled examples
+examples/port-forwarder/port-forwarder
