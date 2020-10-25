@@ -9,7 +9,10 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 )
 
 type PortForwardingInput struct {
@@ -30,15 +33,20 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		},
 	}
 
-	c := new(dataChanel)
+	c := new(dataChannel)
 	if err := c.Open(cfg, in); err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		_ = c.TerminateSession()
+		_ = c.Close()
+	}()
 
 	inCh, errCh := c.ReaderChannel() // reads message from websocket
-	//defer close(inCh)
-	//defer close(errCh)
+
+	// use a signal handler vs. defer since defer operates after an escape from the outer loop
+	// and we can't trust the data channel connection state at that point.
+	installSignalHandler(c)
 
 	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(opts.LocalPort)))
 	if err != nil {
@@ -46,47 +54,65 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	}
 
 	// use limit listener for now, eventually maybe we'll add muxing
+	// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/plugins/port/port_mux.go
 	lsnr := netutil.LimitListener(l, 1)
 	defer lsnr.Close()
 	log.Printf("listening on %s", lsnr.Addr())
 
-	var conn net.Conn
-	conn, err = lsnr.Accept()
-	if err != nil {
-		log.Print(err)
-	}
-
-	outCh := writePump(conn, errCh)
-	//defer close(outCh)
-
+outer:
 	for {
-		select {
-		case dataIn, ok := <-inCh:
-			log.Print("inCh")
-			if ok {
-				if _, err = conn.Write(dataIn); err != nil {
-					log.Printf("error reading from data channel: %v", err)
+		var conn net.Conn
+		conn, err = lsnr.Accept()
+		if err != nil {
+			// not fatal, just wait for next
+			log.Print(err)
+			continue
+		}
+
+		outCh := writePump(conn, errCh)
+
+	inner:
+		for {
+			select {
+			case dataIn, ok := <-inCh:
+				if ok {
+					if _, err = conn.Write(dataIn); err != nil {
+						log.Printf("error reading from data channel: %v", err)
+					}
+				} else {
+					// incoming websocket channel is closed, which is fatal
+					close(outCh)
+					_ = conn.Close()
+					break outer
 				}
-			} else {
-				return nil
-			}
-		case dataOut, ok := <-outCh:
-			log.Print("outCh")
-			if ok {
-				if _, err = c.Write(dataOut); err != nil {
-					log.Printf("error writing to data channel: %v", err)
+			case dataOut, ok := <-outCh:
+				if ok {
+					if _, err = c.Write(dataOut); err != nil {
+						log.Printf("error writing to data channel: %v", err)
+					}
+				} else {
+					// local TCP connection is closed, should be OK to just break inner loop
+					// send DisconnectPort when using non-muxing connection
+					if err := c.DisconnectPort(); err != nil {
+						log.Printf("disconnect error: %v", err)
+					}
+					break inner
 				}
-			} else {
-				return nil
-			}
-		case err, ok := <-errCh:
-			log.Print("errCh")
-			if ok {
-				log.Printf("data channel error: %v", err)
-			} else {
-				return nil
+			case err, ok := <-errCh:
+				if ok {
+					log.Printf("data channel error: %v", err)
+				} else {
+					// I can't think of a good reason why we'd ever end up here, but if we do
+					// we should stop the world
+					log.Print("errCh closed")
+					close(inCh)
+					close(outCh)
+					_ = conn.Close()
+					break outer
+				}
 			}
 		}
+		_ = conn.Close()
 	}
 
 	return nil
@@ -102,7 +128,6 @@ func writePump(conn net.Conn, errCh chan error) chan []byte {
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					close(dataCh)
-					close(errCh)
 					break
 				} else {
 					errCh <- err
@@ -115,4 +140,20 @@ func writePump(conn net.Conn, errCh chan error) chan []byte {
 	}()
 
 	return dataCh
+}
+
+func installSignalHandler(c DataChannel) chan os.Signal {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		log.Printf("Got signal: %s, shutting down", sig.String())
+
+		if err := c.TerminateSession(); err != nil {
+			log.Printf("error sending TerminateSession: %v", err)
+		}
+
+		os.Exit(0)
+	}()
+	return sigCh
 }
