@@ -1,4 +1,9 @@
-package main
+package ssmclient
+
+import (
+	"encoding/json"
+	"time"
+)
 
 // REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/model.go
 type MessageType string
@@ -48,3 +53,51 @@ const (
 	TerminateSession   PayloadTypeFlag = 2
 	ConnectToPortError PayloadTypeFlag = 3
 )
+
+type ActionType string
+
+const (
+	KMSEncryption ActionType = "KMSEncryption"
+	SessionType   ActionType = "SessionType"
+)
+
+type ActionStatus int
+
+const (
+	Success     ActionStatus = 1
+	Failed      ActionStatus = 2
+	Unsupported ActionStatus = 3
+)
+
+type HandshakeRequestPayload struct {
+	AgentVersion           string
+	RequestedClientActions []RequestedClientAction
+}
+
+type RequestedClientAction struct {
+	ActionType       ActionType
+	ActionParameters interface{}
+}
+
+type SessionTypeRequest struct {
+	SessionType string
+	Properties  interface{}
+}
+
+type HandshakeResponsePayload struct {
+	ClientVersion          string
+	ProcessedClientActions []ProcessedClientAction
+	Errors                 []string
+}
+
+type ProcessedClientAction struct {
+	ActionType   ActionType
+	ActionStatus ActionStatus
+	ActionResult json.RawMessage
+	Error        string
+}
+
+type HandshakeCompletePayload struct {
+	HandshakeTimeToComplete time.Duration
+	CustomerMessage         string
+}
