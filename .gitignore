@@ -25,3 +25,4 @@ vendor/
 
 # compiled examples
 examples/port-forwarder/port-forwarder
+examples/ssm-shell/ssm-shell

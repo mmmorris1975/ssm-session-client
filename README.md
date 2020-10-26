@@ -13,6 +13,7 @@ to listen on).  See the [example](examples/port-forwarder) for a simple implemen
   * [SSH over SSM sessions](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
 (AWS-StartSSHSession document)
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
+  * Robustness (reties/error recovery, out of order message handling)
 
 ## References
 The source code for the AWS SSM agent, which is a useful reference for grokking message formats, and the

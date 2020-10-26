@@ -39,7 +39,8 @@ func NewAgentMessage() *AgentMessage {
 }
 
 func (m *AgentMessage) ValidateMessage() error {
-	if m.headerLength != agentMsgHeaderLen {
+	// close_channel message header is 112 bytes
+	if m.headerLength > agentMsgHeaderLen || m.headerLength < agentMsgHeaderLen-4 {
 		return errors.New("invalid message header length")
 	}
 
@@ -73,16 +74,22 @@ func (m *AgentMessage) ValidateMessage() error {
 
 func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	m.headerLength = binary.BigEndian.Uint32(data)
-	m.MessageType = MessageType(strings.TrimSpace(string(data[4:36])))
+	m.MessageType = parseMessageType(data[4:36])
 	m.schemaVersion = binary.BigEndian.Uint32(data[36:40])
 	m.createdDate = parseTime(data[40:48])
 	m.SequenceNumber = int64(binary.BigEndian.Uint64(data[48:56]))
 	m.Flags = AgentMessageFlag(binary.BigEndian.Uint64(data[56:64]))
 	m.messageId = uuid.Must(uuid.FromBytes(formatUuidBytes(data[64:80])))
 	m.payloadDigest = data[80 : 80+sha256.Size]
-	m.PayloadType = PayloadType(binary.BigEndian.Uint32(data[112:116]))
-	m.payloadLength = binary.BigEndian.Uint32(data[116:120])
-	m.Payload = data[120 : 120+m.payloadLength]
+
+	// The channel_closed message has a header length of 112 bytes, I'm assuming this is what's dropped
+	if m.headerLength == agentMsgHeaderLen {
+		m.PayloadType = PayloadType(binary.BigEndian.Uint32(data[112:m.headerLength]))
+	}
+
+	payloadLenEnd := m.headerLength + 4
+	m.payloadLength = binary.BigEndian.Uint32(data[m.headerLength:payloadLenEnd])
+	m.Payload = data[payloadLenEnd : payloadLenEnd+m.payloadLength]
 
 	return m.ValidateMessage()
 }
@@ -167,6 +174,11 @@ func (m *AgentMessage) sha256PayloadDigest() []byte {
 	digest.Write(m.Payload)
 	m.payloadDigest = digest.Sum(nil)
 	return m.payloadDigest
+}
+
+// channel_closed message type is nul padded, others are string padded.  Handle both
+func parseMessageType(data []byte) MessageType {
+	return MessageType(bytes.TrimSpace(bytes.TrimRight(data, string(rune(0x00)))))
 }
 
 func parseTime(data []byte) time.Time {

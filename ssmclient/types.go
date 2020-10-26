@@ -101,3 +101,13 @@ type HandshakeCompletePayload struct {
 	HandshakeTimeToComplete time.Duration
 	CustomerMessage         string
 }
+
+type ChannelClosedPayload struct {
+	MessageType   string
+	MessageId     string
+	DestinationId string
+	SessionId     string
+	SchemaVersion int
+	CreatedDate   string
+	Output        string
+}

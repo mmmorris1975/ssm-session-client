@@ -45,7 +45,9 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	inCh, errCh := c.ReaderChannel() // reads message from websocket
 
 	// use a signal handler vs. defer since defer operates after an escape from the outer loop
-	// and we can't trust the data channel connection state at that point.
+	// and we can't trust the data channel connection state at that point.  Intercepting signals
+	// means we're probably trying to shutdown somewhere in the outer loop, and there's a good
+	// possibility that the data channel is still valid
 	installSignalHandler(c)
 
 	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(opts.LocalPort)))
@@ -118,15 +120,17 @@ outer:
 	return nil
 }
 
-func writePump(conn net.Conn, errCh chan error) chan []byte {
+// shared with shell.go
+func writePump(r io.Reader, errCh chan error) chan []byte {
 	dataCh := make(chan []byte, 65535)
 	buf := make([]byte, 1024)
 
 	go func() {
 		for {
-			n, err := conn.Read(buf)
+			n, err := r.Read(buf)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
+					// local listener has shut down, there's no more work for us to do on this connection
 					close(dataCh)
 					break
 				} else {

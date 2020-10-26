@@ -18,6 +18,7 @@ import (
 type DataChannel interface {
 	Open(client.ConfigProvider, *ssm.StartSessionInput) error
 	ProcessHandshakeRequest(*AgentMessage) error
+	SetTerminalSize(rows, cols uint32) error
 	SendAcknowledgeMessage(*AgentMessage) error
 	TerminateSession() error
 	DisconnectPort() error
@@ -27,9 +28,10 @@ type DataChannel interface {
 }
 
 type dataChannel struct {
-	seqNum int64
-	mu     sync.Mutex
-	ws     *websocket.Conn
+	seqNum  int64
+	mu      sync.Mutex
+	ws      *websocket.Conn
+	synSent bool
 }
 
 // Open creates the web socket connection with the AWS service and sends the request to open the data channel
@@ -73,12 +75,12 @@ func (c *dataChannel) Write(payload []byte) (int, error) {
 }
 
 // WriteMsg is the underlying method which marshals AgentMessage types and sends them to the AWS service.
-// This is provided as a convenience so that messages types not already handled can be sent.  If the
-// specified AgentMessage contains a SequenceNumber < 0, it will be set to the next increment of the
-// internal sequence number counter.
+// This is provided as a convenience so that messages types not already handled can be sent.
 func (c *dataChannel) WriteMsg(msg *AgentMessage) (int, error) {
-	if msg.SequenceNumber < 0 {
-		msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
+	if !c.synSent {
+		atomic.StoreInt64(&c.seqNum, 0)
+		msg.Flags = Syn
+		msg.SequenceNumber = c.seqNum
 	}
 
 	data, err := msg.MarshalBinary()
@@ -88,6 +90,7 @@ func (c *dataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.synSent = true
 	return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
 }
 
@@ -113,6 +116,28 @@ func (c *dataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
 	out.Payload = payload
 
 	_, err = c.WriteMsg(out)
+	return err
+}
+
+func (c *dataChannel) SetTerminalSize(rows, cols uint32) error {
+	input := map[string]uint32{
+		"rows": rows,
+		"cols": cols,
+	}
+
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+
+	msg := NewAgentMessage()
+	msg.MessageType = InputStreamData
+	msg.Flags = Data
+	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
+	msg.PayloadType = Size
+	msg.Payload = payload
+
+	_, err = c.WriteMsg(msg)
 	return err
 }
 
@@ -252,7 +277,13 @@ func (c *dataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
 				log.Printf("UNKNOWN PAYLOAD MSG IN: %s\n%s", m, m.Payload)
 			}
 		case ChannelClosed:
-			log.Print("closed")
+			payload := new(ChannelClosedPayload)
+			_ = json.Unmarshal(m.Payload, payload)
+
+			if len(payload.Output) > 0 {
+				dataCh <- []byte(payload.Output)
+			}
+			close(dataCh)
 			break
 		default:
 			// todo handle unknown message type
