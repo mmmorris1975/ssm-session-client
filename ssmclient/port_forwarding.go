@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"ssm-session-client/datachannel"
 	"strconv"
 	"syscall"
 )
@@ -33,7 +34,7 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		},
 	}
 
-	c := new(dataChannel)
+	c := new(datachannel.SsmDataChannel)
 	if err := c.Open(cfg, in); err != nil {
 		return err
 	}
@@ -146,7 +147,7 @@ func writePump(r io.Reader, errCh chan error) chan []byte {
 	return dataCh
 }
 
-func installSignalHandler(c DataChannel) chan os.Signal {
+func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {

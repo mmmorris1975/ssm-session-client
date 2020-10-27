@@ -1,4 +1,4 @@
-package ssmclient
+package datachannel
 
 import (
 	"encoding/json"

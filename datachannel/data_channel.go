@@ -1,4 +1,4 @@
-package ssmclient
+package datachannel
 
 import (
 	"encoding/binary"
@@ -27,7 +27,7 @@ type DataChannel interface {
 	io.WriteCloser
 }
 
-type dataChannel struct {
+type SsmDataChannel struct {
 	seqNum  int64
 	mu      sync.Mutex
 	ws      *websocket.Conn
@@ -35,13 +35,13 @@ type dataChannel struct {
 }
 
 // Open creates the web socket connection with the AWS service and sends the request to open the data channel
-func (c *dataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
+func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	return c.startSession(cfg, in)
 }
 
 // Close shuts down the web socket connection with the AWS service. Type-specific actions (like sending
 // TerminateSession for port forwarding should be handled before calling Close()
-func (c *dataChannel) Close() error {
+func (c *SsmDataChannel) Close() error {
 	var err error
 	if c.ws != nil {
 		err = c.ws.Close()
@@ -53,7 +53,7 @@ func (c *dataChannel) Close() error {
 // as needed.  If it is an output message type, the payload bytes will be written to the []byte channel, Other
 // message types (handshakes, etc) will be handled internally.  Processing errors for any message type will be
 // written to the error channel.
-func (c *dataChannel) ReaderChannel() (chan []byte, chan error) {
+func (c *SsmDataChannel) ReaderChannel() (chan []byte, chan error) {
 	dataCh := make(chan []byte, 65535)
 	errCh := make(chan error, 4)
 
@@ -63,7 +63,7 @@ func (c *dataChannel) ReaderChannel() (chan []byte, chan error) {
 }
 
 // Write sends an input stream data message with the provided payload set as the message payload
-func (c *dataChannel) Write(payload []byte) (int, error) {
+func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
 	msg.Flags = Data
@@ -76,7 +76,7 @@ func (c *dataChannel) Write(payload []byte) (int, error) {
 
 // WriteMsg is the underlying method which marshals AgentMessage types and sends them to the AWS service.
 // This is provided as a convenience so that messages types not already handled can be sent.
-func (c *dataChannel) WriteMsg(msg *AgentMessage) (int, error) {
+func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	if !c.synSent {
 		atomic.StoreInt64(&c.seqNum, 0)
 		msg.Flags = Syn
@@ -97,7 +97,7 @@ func (c *dataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 // ProcessHandshakeRequest handles the incoming handshake request message for a port forwarding session
 // and sends the required HandshakeResponse message.  This must complete before sending data over the
 // forwarded connection.
-func (c *dataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
+func (c *SsmDataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
 	req := new(HandshakeRequestPayload)
 	if err := json.Unmarshal(msg.Payload, req); err != nil {
 		return err
@@ -119,7 +119,7 @@ func (c *dataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
 	return err
 }
 
-func (c *dataChannel) SetTerminalSize(rows, cols uint32) error {
+func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
 	input := map[string]uint32{
 		"rows": rows,
 		"cols": cols,
@@ -143,7 +143,7 @@ func (c *dataChannel) SetTerminalSize(rows, cols uint32) error {
 
 // SendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
 // the web socket connection, which is required as part of the SSM session protocol
-func (c *dataChannel) SendAcknowledgeMessage(msg *AgentMessage) error {
+func (c *SsmDataChannel) SendAcknowledgeMessage(msg *AgentMessage) error {
 	ack := map[string]interface{}{
 		"AcknowledgedMessageType":           msg.MessageType,
 		"AcknowledgedMessageId":             msg.messageId.String(),
@@ -169,7 +169,7 @@ func (c *dataChannel) SendAcknowledgeMessage(msg *AgentMessage) error {
 
 // TerminateSession sends the TerminateSession flag to the AWS service to indicate that the port forwarding
 // session is ending, and clean up any connections used to communicate with the EC2 instance agent.
-func (c *dataChannel) TerminateSession() error {
+func (c *SsmDataChannel) TerminateSession() error {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
 	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
@@ -188,7 +188,7 @@ func (c *dataChannel) TerminateSession() error {
 // shutting down and any connection used to communicate with the EC2 instance agent can be cleaned up.  Unlike
 // the TerminateSession action, the connection is still capable of initiating a new port forwarding stream to
 // the agent without needing to restart the program.
-func (c *dataChannel) DisconnectPort() error {
+func (c *SsmDataChannel) DisconnectPort() error {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
 	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
@@ -203,7 +203,7 @@ func (c *dataChannel) DisconnectPort() error {
 	return err
 }
 
-func (c *dataChannel) startSession(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
+func (c *SsmDataChannel) startSession(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	out, err := ssm.New(cfg).StartSession(in)
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func (c *dataChannel) startSession(cfg client.ConfigProvider, in *ssm.StartSessi
 	return nil
 }
 
-func (c *dataChannel) openDataChannel(token string) error {
+func (c *SsmDataChannel) openDataChannel(token string) error {
 	openDataChanInput := map[string]string{
 		"MessageSchemaVersion": "1.0",
 		"RequestId":            uuid.New().String(),
@@ -234,7 +234,7 @@ func (c *dataChannel) openDataChannel(token string) error {
 	return c.ws.WriteJSON(openDataChanInput)
 }
 
-func (c *dataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
+func (c *SsmDataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
 	for {
 		_, data, err := c.ws.ReadMessage()
 		if err != nil {
@@ -283,7 +283,7 @@ func (c *dataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
 			if len(payload.Output) > 0 {
 				dataCh <- []byte(payload.Output)
 			}
-			close(dataCh)
+			close(dataCh) // fixme - there's an occasional double close here on shutdown when using shell
 			break
 		default:
 			// todo handle unknown message type
