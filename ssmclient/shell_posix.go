@@ -1,4 +1,4 @@
-// +build !windows
+// +build !windows !js
 
 package ssmclient
 
@@ -17,30 +17,6 @@ func initialize(c datachannel.DataChannel) error {
 	// configure signal handlers and immediately trigger a size update
 	installSignalHandlers(c) <- syscall.SIGWINCH
 	return configureStdin()
-}
-
-func cleanup() error {
-	if origTermios != nil {
-		// reset Stdin to original settings
-		return unix.IoctlSetTermios(int(os.Stdin.Fd()), syscall.TIOCSETAF, origTermios)
-	}
-	return nil
-}
-
-func configureStdin() (err error) {
-	origTermios, err = unix.IoctlGetTermios(int(os.Stdin.Fd()), syscall.TIOCGETA)
-	if err != nil {
-		return err
-	}
-
-	// unsetting ISIG means that this process will no longer respond to the INT, QUIT, SUSP
-	// signals (they go downstream to the instance session, which is desirable).  Which means
-	// those signals are unavailable for shutting down this process
-	newTermios := *origTermios
-	newTermios.Iflag = origTermios.Iflag | syscall.IUTF8
-	newTermios.Lflag = origTermios.Lflag ^ syscall.ICANON ^ syscall.ECHO ^ syscall.ISIG
-
-	return unix.IoctlSetTermios(int(os.Stdin.Fd()), syscall.TIOCSETAF, &newTermios)
 }
 
 func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
@@ -71,7 +47,7 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 func getWinSize() (rows, cols uint32, err error) {
 	var sz *unix.Winsize
 
-	sz, err = unix.IoctlGetWinsize(int(os.Stdin.Fd()), syscall.TIOCGWINSZ)
+	sz, err = unix.IoctlGetWinsize(int(os.Stdin.Fd()), unix.TIOCGWINSZ)
 	if err != nil {
 		return 0, 0, err
 	}

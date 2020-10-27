@@ -8,8 +8,13 @@ function takes an AWS SDK client.ConfigProvider type (which can be satisfied wit
 ssmclient.PortForwardingInput pointer (which contains the target instance and port to connect to, and the local port
 to listen on).  See the [example](examples/port-forwarder) for a simple implementation.
 
+Shell-level access to an instance can be obtained using the `ssmclient.ShellSession()` function.  This function takes
+an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Session), and a string to identify the
+target to connect with.  For now, this client has only been tested on macOS and Linux, connecting to a Linux target.
+See the [example](examples/ssm-shell) for a simple implementation.
+
 ## TODO
-  * Shell sessions (linux, and possibly windows)
+  * Shell sessions from Windows to anywhere, and to Windows EC2 instances.
   * [SSH over SSM sessions](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
 (AWS-StartSSHSession document)
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
