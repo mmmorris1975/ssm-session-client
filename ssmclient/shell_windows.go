@@ -2,7 +2,9 @@
 
 package ssmclient
 
-import "errors"
+import (
+	"errors"
+)
 
 func initialize(c datachannel.DataChannel) error {
 	// todo

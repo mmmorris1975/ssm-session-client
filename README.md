@@ -14,7 +14,7 @@ target to connect with.  For now, this client has only been tested on macOS and 
 See the [example](examples/ssm-shell) for a simple implementation.
 
 ## TODO
-  * Shell sessions from Windows to anywhere, and to Windows EC2 instances.
+  * Shell sessions to Windows EC2 instances and from Windows to anywhere.
   * [SSH over SSM sessions](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
 (AWS-StartSSHSession document)
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding

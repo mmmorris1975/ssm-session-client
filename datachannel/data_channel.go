@@ -283,7 +283,7 @@ func (c *SsmDataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
 			if len(payload.Output) > 0 {
 				dataCh <- []byte(payload.Output)
 			}
-			close(dataCh) // fixme - there's an occasional double close here on shutdown when using shell
+			close(dataCh) // fixme - there's an occasional double close here on shutdown when using shell & ssh
 			break
 		default:
 			// todo handle unknown message type

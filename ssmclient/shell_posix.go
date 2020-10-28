@@ -8,14 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"ssm-session-client/datachannel"
-	"syscall"
 )
 
 var origTermios *unix.Termios
 
 func initialize(c datachannel.DataChannel) error {
 	// configure signal handlers and immediately trigger a size update
-	installSignalHandlers(c) <- syscall.SIGWINCH
+	installSignalHandlers(c) <- unix.SIGWINCH
 	return configureStdin()
 }
 
@@ -24,17 +23,17 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 
 	// we're configuring stdin to pass SIGINT and SIGQUIT to the session terminal, which
 	// means they'll never be seen here and there's no use to handle them.
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGWINCH)
+	signal.Notify(sigCh, unix.SIGTERM, unix.SIGWINCH)
 
 	go func() {
 		switch <-sigCh {
-		case syscall.SIGWINCH:
+		case unix.SIGWINCH:
 			// some terminal applications may not fire this signal when resizing (don't see it on MacOS) :(
 			// plus, does Go implement sigwinch internally for windows? (we know the OS proper doesn't)
 			if err := updateTermSize(c); err != nil {
 				// todo handle error (datachannel.SetTerminalSize error)
 			}
-		case syscall.SIGTERM:
+		case unix.SIGTERM:
 			log.Print("term")
 			_ = cleanup()
 			// os.Exit(0) ??

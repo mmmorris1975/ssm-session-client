@@ -121,7 +121,7 @@ outer:
 	return nil
 }
 
-// shared with shell.go
+// shared with shell.go and ssh.go
 func writePump(r io.Reader, errCh chan error) chan []byte {
 	dataCh := make(chan []byte, 65535)
 	buf := make([]byte, 1024)
@@ -147,6 +147,7 @@ func writePump(r io.Reader, errCh chan error) chan []byte {
 	return dataCh
 }
 
+// shared with ssh.go
 func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
