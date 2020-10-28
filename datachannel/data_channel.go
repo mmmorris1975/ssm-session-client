@@ -3,6 +3,7 @@ package datachannel
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/ssm"
@@ -15,6 +16,8 @@ import (
 	"sync/atomic"
 )
 
+// DataChannel is the interface definition this library uses for handling communication
+// with the AWS SSM messaging service
 type DataChannel interface {
 	Open(client.ConfigProvider, *ssm.StartSessionInput) error
 	ProcessHandshakeRequest(*AgentMessage) error
@@ -22,20 +25,25 @@ type DataChannel interface {
 	SendAcknowledgeMessage(*AgentMessage) error
 	TerminateSession() error
 	DisconnectPort() error
-	ReaderChannel() (chan []byte, chan error)
 	WriteMsg(*AgentMessage) (int, error)
-	io.WriteCloser
+	io.ReadWriteCloser
+	io.ReaderFrom
+	io.WriterTo
 }
 
+// SsmDataChannel represents the data channel of the websocket connection used to communicate with the AWS
+// SSM service.  A new(SsmDataChannel) is ready for use, and should immediately call the Open() method
 type SsmDataChannel struct {
-	seqNum  int64
-	mu      sync.Mutex
-	ws      *websocket.Conn
-	synSent bool
+	seqNum      int64
+	mu          sync.Mutex
+	ws          *websocket.Conn
+	synSent     bool
+	handshakeCh chan bool
 }
 
 // Open creates the web socket connection with the AWS service and sends the request to open the data channel
 func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
+	c.handshakeCh = make(chan bool, 1)
 	return c.startSession(cfg, in)
 }
 
@@ -49,20 +57,75 @@ func (c *SsmDataChannel) Close() error {
 	return err
 }
 
-// ReaderChannel opens up a channel which will receive data from the web socket, and send message acknowledgements
-// as needed.  If it is an output message type, the payload bytes will be written to the []byte channel, Other
-// message types (handshakes, etc) will be handled internally.  Processing errors for any message type will be
-// written to the error channel.
-func (c *SsmDataChannel) ReaderChannel() (chan []byte, chan error) {
-	dataCh := make(chan []byte, 65535)
-	errCh := make(chan error, 4)
-
-	go c.startReadLoop(dataCh, errCh)
-
-	return dataCh, errCh
+// WaitForHandshakeComplete blocks further processing until the required SSM handshake sequence used for
+// port-based clients (including ssh) completes.
+func (c *SsmDataChannel) WaitForHandshakeComplete() error {
+	for {
+		select {
+		case <-c.handshakeCh:
+			log.Print("handshake complete")
+			return nil
+		default:
+			if _, err := c.readMsg(); err != nil {
+				return err
+			}
+		}
+	}
 }
 
-// Write sends an input stream data message with the provided payload set as the message payload
+// Read will get a single message from the websocket connection, however if the incoming message
+// is not a message which contains usable output data, expect a 0 byte read.
+// only here to satisfy the io.Reader requirement of io.Copy ... use WriteTo to get data from AWS instead
+func (c *SsmDataChannel) Read([]byte) (int, error) {
+	data, err := c.readMsg()
+	return len(data), err
+}
+
+// WriteTo uses the data channel as an io.Copy read source, writing output to the provided writer
+// must also implement io.Reader
+func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
+	var data []byte
+	for {
+		data, err = c.readMsg()
+		if data != nil {
+			n += int64(len(data))
+			_, _ = w.Write(data) // fixme - handle error? (we'll probably want to know if w is closed and stuff
+		}
+
+		if err != nil {
+			log.Printf("WriteTo error: %v", err)
+			break
+		}
+	}
+	return
+}
+
+// ReadFrom uses the data channel as an io.Copy write destination, reading data from the provided reader
+// must also implement io.Writer
+func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
+	buf := make([]byte, 1536) // 1536 appears to be a default websocket max packet size
+	var x int
+
+	for {
+		x, err = r.Read(buf)
+		n += int64(x)
+		if err != nil {
+			log.Printf("ReadFrom read error: %v", err)
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+			break
+		}
+
+		if _, err = c.Write(buf[:x]); err != nil {
+			log.Printf("ReadFrom write error: %v", err)
+			break
+		}
+	}
+	return
+}
+
+// Write sends an input stream data message with the provided payload bytes as the message payload
 func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
@@ -119,6 +182,8 @@ func (c *SsmDataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
 	return err
 }
 
+// SetTerminalSize sends a message to the SSM service which indicates the size to use for the remote terminal
+// when using a shell session client
 func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
 	input := map[string]uint32{
 		"rows": rows,
@@ -234,62 +299,59 @@ func (c *SsmDataChannel) openDataChannel(token string) error {
 	return c.ws.WriteJSON(openDataChanInput)
 }
 
-func (c *SsmDataChannel) startReadLoop(dataCh chan []byte, errCh chan error) {
-	for {
-		_, data, err := c.ws.ReadMessage()
-		if err != nil {
-			// gorilla code states this is uber-fatal, and we just need to bail out
-			log.Printf("ReadMessage freakout: %v", err)
-			errCh <- err
-			break
-		}
-
-		m := new(AgentMessage)
-		if err = m.UnmarshalBinary(data); err != nil {
-			// validation error
-			errCh <- err
-			continue
-		}
-
-		if err = c.SendAcknowledgeMessage(m); err != nil {
-			// todo - handle this better (retry?)
-			errCh <- err
-			break
-		}
-
-		switch m.MessageType {
-		case Acknowledge:
-			// anything?
-		case OutputStreamData:
-			switch m.PayloadType {
-			case Output:
-				dataCh <- m.Payload
-			case HandshakeRequest:
-				// port forwarding session setup, we'll consider a handshake failure fatal
-				if err = c.ProcessHandshakeRequest(m); err != nil {
-					errCh <- err
-					break
-				}
-			case HandshakeComplete:
-				// anything?
-				log.Println("Ready!")
-			default:
-				log.Printf("UNKNOWN PAYLOAD MSG IN: %s\n%s", m, m.Payload)
-			}
-		case ChannelClosed:
-			payload := new(ChannelClosedPayload)
-			_ = json.Unmarshal(m.Payload, payload)
-
-			if len(payload.Output) > 0 {
-				dataCh <- []byte(payload.Output)
-			}
-			close(dataCh) // fixme - there's an occasional double close here on shutdown when using shell & ssh
-			break
-		default:
-			// todo handle unknown message type
-			panic(fmt.Sprintf("Unknown message type: %+v", m))
-		}
+func (c *SsmDataChannel) readMsg() ([]byte, error) {
+	_, data, err := c.ws.ReadMessage()
+	if err != nil {
+		// gorilla code states this is uber-fatal, and we just need to bail out
+		log.Printf("ReadMessage freakout: %v", err)
+		return nil, err
 	}
+
+	m := new(AgentMessage)
+	if err = m.UnmarshalBinary(data); err != nil {
+		// validation error
+		return nil, err
+	}
+
+	if err = c.SendAcknowledgeMessage(m); err != nil {
+		// todo - handle this better (retry?)
+		return nil, err
+	}
+
+	switch m.MessageType {
+	case Acknowledge:
+		// anything? other than avoiding the default case
+	case OutputStreamData:
+		switch m.PayloadType {
+		case Output:
+			return m.Payload, nil
+		case HandshakeRequest:
+			// port forwarding session setup, we'll consider a handshake failure fatal
+			if err = c.ProcessHandshakeRequest(m); err != nil {
+				return nil, err
+			}
+		case HandshakeComplete:
+			if c.handshakeCh != nil {
+				close(c.handshakeCh)
+			}
+		default:
+			return nil, fmt.Errorf("UNKNOWN INCOMING MSG PAYLOAD: %s\n%s", m, m.Payload)
+		}
+	case ChannelClosed:
+		payload := new(ChannelClosedPayload)
+		if err = json.Unmarshal(m.Payload, payload); err != nil {
+			return nil, err
+		}
+
+		var output []byte
+		if len(payload.Output) > 0 {
+			output = []byte(payload.Output)
+		}
+		return output, io.EOF
+	default:
+		return nil, fmt.Errorf("UNKNOWN MESSAGE TYPE: %+v", m)
+	}
+	return nil, nil
 }
 
 // the only requirement of the handshake response is that we include an element in ProcessedClientActions

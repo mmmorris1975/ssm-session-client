@@ -19,7 +19,7 @@ func initialize(c datachannel.DataChannel) error {
 }
 
 func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
-	sigCh := make(chan os.Signal, 1)
+	sigCh := make(chan os.Signal, 10)
 
 	// we're configuring stdin to pass SIGINT and SIGQUIT to the session terminal, which
 	// means they'll never be seen here and there's no use to handle them.
@@ -36,7 +36,7 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 		case unix.SIGTERM:
 			log.Print("term")
 			_ = cleanup()
-			// os.Exit(0) ??
+			//os.Exit(0) ??
 		}
 	}()
 

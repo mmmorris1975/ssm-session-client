@@ -43,13 +43,16 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		_ = c.Close()
 	}()
 
-	inCh, errCh := c.ReaderChannel() // reads message from websocket
-
 	// use a signal handler vs. defer since defer operates after an escape from the outer loop
 	// and we can't trust the data channel connection state at that point.  Intercepting signals
 	// means we're probably trying to shutdown somewhere in the outer loop, and there's a good
 	// possibility that the data channel is still valid
 	installSignalHandler(c)
+
+	log.Print("waiting for handshake")
+	if err := c.WaitForHandshakeComplete(); err != nil {
+		return err
+	}
 
 	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(opts.LocalPort)))
 	if err != nil {
@@ -62,89 +65,39 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	defer lsnr.Close()
 	log.Printf("listening on %s", lsnr.Addr())
 
-outer:
+	errCh := make(chan error, 5)
 	for {
 		var conn net.Conn
 		conn, err = lsnr.Accept()
 		if err != nil {
-			// not fatal, just wait for next
+			// not fatal, just wait for next (maybe unless lsnr is dead?)
 			log.Print(err)
 			continue
 		}
 
-		outCh := writePump(conn, errCh)
-
-	inner:
-		for {
-			select {
-			case dataIn, ok := <-inCh:
-				if ok {
-					if _, err = conn.Write(dataIn); err != nil {
-						log.Printf("error reading from data channel: %v", err)
-					}
-				} else {
-					// incoming websocket channel is closed, which is fatal
-					close(outCh)
-					_ = conn.Close()
-					break outer
-				}
-			case dataOut, ok := <-outCh:
-				if ok {
-					if _, err = c.Write(dataOut); err != nil {
-						log.Printf("error writing to data channel: %v", err)
-					}
-				} else {
-					// local TCP connection is closed, should be OK to just break inner loop
-					// send DisconnectPort when using non-muxing connection
-					if err := c.DisconnectPort(); err != nil {
-						log.Printf("disconnect error: %v", err)
-					}
-					break inner
-				}
-			case err, ok := <-errCh:
-				if ok {
-					log.Printf("data channel error: %v", err)
-				} else {
-					// I can't think of a good reason why we'd ever end up here, but if we do
-					// we should stop the world
-					log.Print("errCh closed")
-					close(inCh)
-					close(outCh)
-					_ = conn.Close()
-					break outer
-				}
+		go func() {
+			// uses c.ReadFrom()
+			if _, err := io.Copy(c, conn); err != nil {
+				errCh <- err
 			}
-		}
-		_ = conn.Close()
-	}
+			conn.Close()
+			errCh <- nil
+		}()
 
-	return nil
-}
-
-// shared with shell.go and ssh.go
-func writePump(r io.Reader, errCh chan error) chan []byte {
-	dataCh := make(chan []byte, 65535)
-	buf := make([]byte, 1024)
-
-	go func() {
-		for {
-			n, err := r.Read(buf)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					// local listener has shut down, there's no more work for us to do on this connection
-					close(dataCh)
-					break
-				} else {
+		go func() {
+			// uses c.WriteTo()
+			if _, err := io.Copy(conn, c); err != nil {
+				if !errors.Is(err, io.EOF) {
 					errCh <- err
-					break
 				}
 			}
+			conn.Close()
+			errCh <- nil
+		}()
 
-			dataCh <- buf[:n]
-		}
-	}()
-
-	return dataCh
+		<-errCh
+		//conn.Close()
+	}
 }
 
 // shared with ssh.go

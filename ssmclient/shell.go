@@ -1,9 +1,10 @@
 package ssmclient
 
 import (
-	"fmt"
+	"errors"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"io"
 	"log"
 	"os"
 	"ssm-session-client/datachannel"
@@ -16,8 +17,6 @@ func ShellSession(cfg client.ConfigProvider, target string) error {
 	}
 	defer c.Close()
 
-	inCh, errCh := c.ReaderChannel() // reads message from websocket
-
 	// call initialize after doing ReaderChannel (so we process anything we need to do with the websocket)
 	// but before we start using Stdin with writePump()
 	if err := initialize(c); err != nil {
@@ -25,54 +24,21 @@ func ShellSession(cfg client.ConfigProvider, target string) error {
 	}
 	defer cleanup()
 
-	outCh := writePump(os.Stdin, errCh)
-
-	var exiting bool
-outer:
-	for {
-		select {
-		case dataIn, ok := <-inCh:
-			if ok {
-				_, _ = fmt.Fprintf(os.Stdout, "%s", dataIn) // maybe allow other writers?
-			} else {
-				// incoming websocket channel is closed, or ChannelClosed message received, time to exit
-				if !exiting {
-					close(outCh)
-					exiting = true
-				}
-				break outer
-			}
-		case dataOut, ok := <-outCh:
-			if ok {
-				if _, err := c.Write(dataOut); err != nil {
-					log.Printf("error writing to data channel: %v", err)
-				}
-			} else {
-				// we have lost stdin, all we can do is bail out
-				if !exiting {
-					close(inCh)
-					exiting = true
-				}
-				break outer
-			}
-		case err, ok := <-errCh:
-			if ok {
-				log.Printf("data channel error: %v", err)
-			} else {
-				// I can't think of a good reason why we'd ever end up here, but if we do
-				// we should stop the world
-				log.Print("errCh closed")
-				if !exiting {
-					close(inCh)
-					close(outCh)
-					exiting = true
-				}
-				break outer
-			}
+	errCh := make(chan error, 5)
+	go func() {
+		if _, err := io.Copy(c, os.Stdin); err != nil {
+			errCh <- err
 		}
+	}()
+
+	if _, err := io.Copy(os.Stdout, c); err != nil {
+		if !errors.Is(err, io.EOF) {
+			errCh <- err
+		}
+		close(errCh)
 	}
 
-	return nil
+	return <-errCh
 }
 
 func updateTermSize(c datachannel.DataChannel) error {
