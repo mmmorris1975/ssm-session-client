@@ -1,7 +1,7 @@
 package ssmclient
 
 import (
-	"errors"
+	"context"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/ssm"
@@ -65,7 +65,10 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	defer lsnr.Close()
 	log.Printf("listening on %s", lsnr.Addr())
 
-	errCh := make(chan error, 5)
+	errCh := make(chan error)
+	doneCh := make(chan bool, 1)
+	dataCh := make(chan []byte)
+
 	for {
 		var conn net.Conn
 		conn, err = lsnr.Accept()
@@ -76,27 +79,64 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		}
 
 		go func() {
+			// read from conn and write to websocket (tx data to AWS)
 			// uses c.ReadFrom()
-			if _, err := io.Copy(c, conn); err != nil {
+			if _, err = io.Copy(c, conn); err != nil {
 				errCh <- err
 			}
-			conn.Close()
-			errCh <- nil
+			doneCh <- true
+			log.Print("readfrom complete")
 		}()
+
+		ctx, cancel := context.WithCancel(context.Background())
 
 		go func() {
-			// uses c.WriteTo()
-			if _, err := io.Copy(conn, c); err != nil {
-				if !errors.Is(err, io.EOF) {
-					errCh <- err
+			buf := make([]byte, 2048)
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					n, err := c.Read(buf)
+					if err != nil {
+						errCh <- err
+						return
+					}
+					dataCh <- buf[:n]
 				}
 			}
-			conn.Close()
-			errCh <- nil
 		}()
 
-		<-errCh
-		//conn.Close()
+	outer:
+		for {
+			select {
+			case <-doneCh:
+				cancel()
+				break outer
+			case <-errCh:
+				cancel()
+				log.Print(err)
+				break outer
+			case msg := <-dataCh:
+				// todo process data
+				var payload []byte
+				payload, err = c.HandleMsg(msg)
+				if err != nil {
+					log.Print(err)
+					break outer
+				}
+
+				_, err = conn.Write(payload)
+				if err != nil {
+					log.Print(err)
+					break outer
+				}
+			}
+		}
+
+		_ = c.DisconnectPort()
+		_ = conn.Close()
 	}
 }
 

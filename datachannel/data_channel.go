@@ -60,64 +60,92 @@ func (c *SsmDataChannel) Close() error {
 // WaitForHandshakeComplete blocks further processing until the required SSM handshake sequence used for
 // port-based clients (including ssh) completes.
 func (c *SsmDataChannel) WaitForHandshakeComplete() error {
+	buf := make([]byte, 4096)
+
 	for {
 		select {
 		case <-c.handshakeCh:
 			log.Print("handshake complete")
 			return nil
 		default:
-			if _, err := c.readMsg(); err != nil {
+			n, err := c.Read(buf)
+			if err != nil {
+				return err
+			}
+
+			if _, err = c.HandleMsg(buf[:n]); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-// Read will get a single message from the websocket connection, however if the incoming message
-// is not a message which contains usable output data, expect a 0 byte read.
-// only here to satisfy the io.Reader requirement of io.Copy ... use WriteTo to get data from AWS instead
-func (c *SsmDataChannel) Read([]byte) (int, error) {
-	data, err := c.readMsg()
-	return len(data), err
+// Read will get a single message from the websocket connection. The unprocessed message is copied to the
+// requested []byte (which should be sized to handle at least 1536 bytes)
+func (c *SsmDataChannel) Read(data []byte) (int, error) {
+	_, msg, err := c.ws.ReadMessage()
+	n := copy(data[:len(msg)], msg)
+
+	if err != nil {
+		// gorilla code states this is uber-fatal, and we just need to bail out
+		log.Printf("ReadMessage freakout: %v", err)
+		return n, err
+	}
+
+	if n < agentMsgHeaderLen {
+		return n, errors.New("invalid message received, too short")
+	}
+
+	return n, nil
 }
 
 // WriteTo uses the data channel as an io.Copy read source, writing output to the provided writer
-// must also implement io.Reader
 func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
-	var data []byte
+	buf := make([]byte, 2048)
+	var nr, nw int
+	var payload []byte
+
 	for {
-		data, err = c.readMsg()
-		if data != nil {
-			n += int64(len(data))
-			_, _ = w.Write(data) // fixme - handle error? (we'll probably want to know if w is closed and stuff
+		nr, err = c.Read(buf)
+		if err != nil {
+			log.Printf("WriteTo read error: %v", err)
+			return n, err
 		}
 
-		if err != nil {
-			log.Printf("WriteTo error: %v", err)
-			break
+		if nr > 0 {
+			payload, err = c.HandleMsg(buf[:nr])
+
+			if len(payload) > 0 {
+				nw, err = w.Write(payload)
+				n += int64(nw)
+				if err != nil {
+					log.Printf("WriteTo write error: %v", err)
+					return n, err
+				}
+			}
 		}
 	}
-	return
 }
 
 // ReadFrom uses the data channel as an io.Copy write destination, reading data from the provided reader
-// must also implement io.Writer
 func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, 1536) // 1536 appears to be a default websocket max packet size
-	var x int
+	var nr int
 
 	for {
-		x, err = r.Read(buf)
-		n += int64(x)
+		nr, err = r.Read(buf)
+		n += int64(nr)
 		if err != nil {
 			log.Printf("ReadFrom read error: %v", err)
 			if errors.Is(err, io.EOF) {
+				// the contract of ReaderFrom states that io.EOF should not be returned, just
+				// exit the loop and return no error to indicate we are done
 				err = nil
 			}
 			break
 		}
 
-		if _, err = c.Write(buf[:x]); err != nil {
+		if _, err = c.Write(buf[:nr]); err != nil {
 			log.Printf("ReadFrom write error: %v", err)
 			break
 		}
@@ -299,21 +327,14 @@ func (c *SsmDataChannel) openDataChannel(token string) error {
 	return c.ws.WriteJSON(openDataChanInput)
 }
 
-func (c *SsmDataChannel) readMsg() ([]byte, error) {
-	_, data, err := c.ws.ReadMessage()
-	if err != nil {
-		// gorilla code states this is uber-fatal, and we just need to bail out
-		log.Printf("ReadMessage freakout: %v", err)
-		return nil, err
-	}
-
+func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	m := new(AgentMessage)
-	if err = m.UnmarshalBinary(data); err != nil {
+	if err := m.UnmarshalBinary(data); err != nil {
 		// validation error
 		return nil, err
 	}
 
-	if err = c.SendAcknowledgeMessage(m); err != nil {
+	if err := c.SendAcknowledgeMessage(m); err != nil {
 		// todo - handle this better (retry?)
 		return nil, err
 	}
@@ -327,7 +348,7 @@ func (c *SsmDataChannel) readMsg() ([]byte, error) {
 			return m.Payload, nil
 		case HandshakeRequest:
 			// port forwarding session setup, we'll consider a handshake failure fatal
-			if err = c.ProcessHandshakeRequest(m); err != nil {
+			if err := c.ProcessHandshakeRequest(m); err != nil {
 				return nil, err
 			}
 		case HandshakeComplete:
@@ -339,7 +360,7 @@ func (c *SsmDataChannel) readMsg() ([]byte, error) {
 		}
 	case ChannelClosed:
 		payload := new(ChannelClosedPayload)
-		if err = json.Unmarshal(m.Payload, payload); err != nil {
+		if err := json.Unmarshal(m.Payload, payload); err != nil {
 			return nil, err
 		}
 
