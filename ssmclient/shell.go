@@ -10,6 +10,9 @@ import (
 	"ssm-session-client/datachannel"
 )
 
+// ShellSession starts a shell session with the instance specified in the target parameter.  The
+// client.ConfigProvider parameter will be used to call the AWS SSM StartSession API, which is used
+// as part of establishing the websocket communication channel.
 func ShellSession(cfg client.ConfigProvider, target string) error {
 	c := new(datachannel.SsmDataChannel)
 	if err := c.Open(cfg, new(ssm.StartSessionInput).SetTarget(target)); err != nil {

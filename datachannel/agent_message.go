@@ -13,7 +13,9 @@ import (
 
 const agentMsgHeaderLen = 116 // the binary size of all AgentMessage fields except payloadLength and Payload
 
-// this is the order the fields must appear as on the wire
+// AgentMessage is the structural representation of the binary format of an SSM agent message use for communication
+// between local clients (like this), and remote agents installed on EC2 instances.
+// This is the order the fields must appear as on the wire
 // REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/agentmessage.go
 type AgentMessage struct {
 	headerLength   uint32
@@ -29,6 +31,7 @@ type AgentMessage struct {
 	Payload        []byte
 }
 
+// NewAgentMessage creates an AgentMessage ready to load with payload
 func NewAgentMessage() *AgentMessage {
 	return &AgentMessage{
 		headerLength:  agentMsgHeaderLen,
@@ -38,6 +41,7 @@ func NewAgentMessage() *AgentMessage {
 	}
 }
 
+// ValidateMessage performs checks on the values of the AgentMessage to ensure they are sane
 func (m *AgentMessage) ValidateMessage() error {
 	// close_channel message header is 112 bytes
 	if m.headerLength > agentMsgHeaderLen || m.headerLength < agentMsgHeaderLen-4 {
@@ -72,6 +76,8 @@ func (m *AgentMessage) ValidateMessage() error {
 	return nil
 }
 
+// UnmarshalBinary reads the wire format data and updates the fields in the method receiver.  Satisfies the
+// encoding.BinaryUnmarshaler interface
 func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	m.headerLength = binary.BigEndian.Uint32(data)
 	m.MessageType = parseMessageType(data[4:36])
@@ -94,6 +100,8 @@ func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	return m.ValidateMessage()
 }
 
+// MarshalBinary converts the fields in the method receiver to the expected wire format used by the websocket
+// protocol with the SSM messaging service.  Satisfies the encoding.BinaryMarshaler interface
 func (m *AgentMessage) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 

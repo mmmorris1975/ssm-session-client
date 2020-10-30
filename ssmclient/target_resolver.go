@@ -13,10 +13,14 @@ import (
 )
 
 var (
+	// ErrInvalidTargetFormat is the error returned if the target format doesn't match the expected format
+	// required by the resolver
 	ErrInvalidTargetFormat = errors.New("invalid target format")
-	ErrNoInstanceFound     = errors.New("no instances returned from lookup")
+	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance
+	ErrNoInstanceFound = errors.New("no instances returned from lookup")
 )
 
+// TargetResolver is the interface specification for something which knows how to resolve and EC2 instance identifier
 type TargetResolver interface {
 	Resolve(string) (string, error)
 }
@@ -59,14 +63,17 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (string, err
 	return "", ErrNoInstanceFound
 }
 
+// NewTagResolver is a TargetResolver which knows how to find an EC2 instance using tags.
 func NewTagResolver(cfg client.ConfigProvider) *tagResolver {
 	return &tagResolver{&ec2Resolver{cfg: cfg}}
 }
 
+// NewIPResolver is a TargetResolver which knows how to find an EC2 instance using the private IPv4 address
 func NewIPResolver(cfg client.ConfigProvider) *ipResolver {
 	return &ipResolver{&ec2Resolver{cfg: cfg}}
 }
 
+// NewDNSResolver is a TargetResolver which knows how to find an EC2 instance using DNS TXT record lookups
 func NewDNSResolver() *dnsResolver {
 	return new(dnsResolver)
 }

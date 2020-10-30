@@ -15,14 +15,19 @@ import (
 	"syscall"
 )
 
+// PortForwardingInput configures the port forwarding session parameters.
+// Target is the EC2 instance ID to establish the session with.
+// RemotePort is the port on the EC2 instance to connect to.
+// LocalPort is the port on the local host to listen to.  If not provided, a random port will be used.
 type PortForwardingInput struct {
 	Target     string
 	RemotePort int
 	LocalPort  int
 }
 
-// Both the basic and muxing plugins on the agent side support the Flag payload type with the
-// PayloadTypeFlag of TerminateSession.  The basic plugin also supports the DisconnectToPort PayloadTypeFlag
+// PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
+// configure the session.  The client.ConfigProvider parameter will be used to call the AWS SSM StartSession
+// API, which is used as part of establishing the websocket communication channel.
 func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
 	in := &ssm.StartSessionInput{
 		DocumentName: aws.String("AWS-StartPortForwardingSession"),
@@ -38,6 +43,7 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		return err
 	}
 	defer func() {
+		// Both the basic and muxing plugins support TerminateSession on the agent side.
 		_ = c.TerminateSession()
 		_ = c.Close()
 	}()
@@ -91,6 +97,8 @@ outer:
 			select {
 			case <-doneCh:
 				//log.Print("sending DisconnectPort")
+				// basic (non-muxing) connections support DisconnectPort to signal to the remote agent that
+				// we are shutting down this particular connection on our end, and possibly expect a new one.
 				_ = c.DisconnectPort()
 				break inner
 			case data, ok := <-inCh:
