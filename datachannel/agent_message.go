@@ -82,7 +82,7 @@ func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	m.messageId = uuid.Must(uuid.FromBytes(formatUuidBytes(data[64:80])))
 	m.payloadDigest = data[80 : 80+sha256.Size]
 
-	// The channel_closed message has a header length of 112 bytes, I'm assuming this is what's dropped
+	// The channel_closed message has a header length of 112 bytes, assuming this is what's dropped
 	if m.headerLength == agentMsgHeaderLen {
 		m.PayloadType = PayloadType(binary.BigEndian.Uint32(data[112:m.headerLength]))
 	}
@@ -176,7 +176,7 @@ func (m *AgentMessage) sha256PayloadDigest() []byte {
 	return m.payloadDigest
 }
 
-// channel_closed message type is nul padded, others are string padded.  Handle both
+// channel_closed message type is nul padded, others are space padded.  Handle both
 func parseMessageType(data []byte) MessageType {
 	return MessageType(bytes.TrimSpace(bytes.TrimRight(data, string(rune(0x00)))))
 }

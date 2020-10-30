@@ -21,9 +21,8 @@ func initialize(c datachannel.DataChannel) error {
 func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 	sigCh := make(chan os.Signal, 10)
 
-	// we're configuring stdin to pass SIGINT and SIGQUIT to the session terminal, which
-	// means they'll never be seen here and there's no use to handle them.
-	signal.Notify(sigCh, unix.SIGTERM, unix.SIGWINCH)
+	// for some reason we're not seeing INT, QUIT, and TERM signals :(
+	signal.Notify(sigCh, os.Interrupt, unix.SIGQUIT, unix.SIGTERM, unix.SIGWINCH)
 
 	go func() {
 		switch <-sigCh {
@@ -33,10 +32,11 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 			if err := updateTermSize(c); err != nil {
 				// todo handle error (datachannel.SetTerminalSize error)
 			}
-		case unix.SIGTERM:
-			log.Print("term")
+		case os.Interrupt, unix.SIGQUIT, unix.SIGTERM:
+			log.Print("exiting")
 			_ = cleanup()
-			//os.Exit(0) ??
+			_ = c.Close()
+			os.Exit(0)
 		}
 	}()
 

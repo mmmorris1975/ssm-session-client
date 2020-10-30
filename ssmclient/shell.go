@@ -22,7 +22,7 @@ func ShellSession(cfg client.ConfigProvider, target string) error {
 	if err := initialize(c); err != nil {
 		log.Fatal(err)
 	}
-	defer cleanup()
+	defer cleanup() // not called if terminated by a signal
 
 	errCh := make(chan error, 5)
 	go func() {

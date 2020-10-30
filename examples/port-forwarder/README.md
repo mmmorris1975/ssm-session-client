@@ -18,7 +18,9 @@ target_spec is a required argument in the form of ec2_instance_id:port_number (e
 
 If session setup is successful, the following messages will be output to the terminal:
 ```
-2020/02/02 01:23:45 listening on [::]:61905 <-- random port used for example
-2020/02/02 01:23:46 Ready!
+2020/02/02 12:34:56 waiting for handshake
+2020/02/02 12:34:56 handshake complete
+2020/02/02 12:34:56 listening on [::]:64445 <-- random port used for example
+
 ```
-and the port forwarding session is available to receive data on port `61905` to send to the specified EC2 target.
+and the port forwarding session is available to receive data on port `64445` to send to the specified EC2 target.

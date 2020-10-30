@@ -4,7 +4,7 @@ easy to digest way of integrating AWS SSM sessions to Go code without needing to
 [session manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
 
 Simple, single stream port forwarding is available through the `ssmclient.PortForwardingSession()` function.  This
-function takes an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Session), and 
+function takes an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Session), and a
 ssmclient.PortForwardingInput pointer (which contains the target instance and port to connect to, and the local port
 to listen on).  See the [example](examples/port-forwarder) for a simple implementation.
 
@@ -13,12 +13,17 @@ an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Ses
 target to connect with.  For now, this client has only been tested on macOS and Linux, connecting to a Linux target.
 See the [example](examples/ssm-shell) for a simple implementation.
 
+SSH over SSM integration can be leveraged via the `ssmclient.SshSession()` function.  Since the SSM SSH integration is
+a specialized form of port forwarding, the function takes the same arguments as `ssmclient.PortForwardingSession()`.
+The difference being that any LocalPort configuration is ignored, and if no RemotePort is provided, the defaule value
+of 22 is used.  See the [example](examples/ssm-ssh) for a simple implementation, which can be used in the SSH
+configuration to enable connecting via SSH.  More information can be found in the
+[AWS docs](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html)
+
 ## TODO
   * Shell sessions to Windows EC2 instances and from Windows to anywhere.
-  * [SSH over SSM sessions](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
-(AWS-StartSSHSession document)
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
-  * Robustness (reties/error recovery, out of order message handling)
+  * Robustness (retries/error recovery, out of order message handling)
 
 ## References
 The source code for the AWS SSM agent, which is a useful reference for grokking message formats, and the

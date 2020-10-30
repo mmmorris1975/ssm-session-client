@@ -10,20 +10,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"sync/atomic"
 )
 
-// DataChannel is the interface definition this library uses for handling communication
-// with the AWS SSM messaging service
+// DataChannel is the interface definition for handling communication with the AWS SSM messaging service
 type DataChannel interface {
 	Open(client.ConfigProvider, *ssm.StartSessionInput) error
 	HandleMsg(data []byte) ([]byte, error)
-	ProcessHandshakeRequest(*AgentMessage) error
 	SetTerminalSize(rows, cols uint32) error
-	SendAcknowledgeMessage(*AgentMessage) error
 	TerminateSession() error
 	DisconnectPort() error
 	WriteMsg(*AgentMessage) (int, error)
@@ -42,7 +38,7 @@ type SsmDataChannel struct {
 	handshakeCh chan bool
 }
 
-// Open creates the web socket connection with the AWS service and sends the request to open the data channel
+// Open creates the web socket connection with the AWS service and opens the data channel
 func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
 	return c.startSession(cfg, in)
@@ -88,7 +84,10 @@ func (c *SsmDataChannel) Read(data []byte) (int, error) {
 
 	if err != nil {
 		// gorilla code states this is uber-fatal, and we just need to bail out
-		log.Printf("ReadMessage freakout: %v", err)
+		//log.Printf("ReadMessage freakout: %v", err)
+		if websocket.IsCloseError(err, 1006) {
+			err = io.EOF
+		}
 		return n, err
 	}
 
@@ -153,7 +152,7 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 	return
 }
 
-// Write sends an input stream data message with the provided payload bytes as the message payload
+// Write sends an input stream data message type with the provided payload bytes as the message payload
 func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
@@ -166,12 +165,17 @@ func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 }
 
 // WriteMsg is the underlying method which marshals AgentMessage types and sends them to the AWS service.
-// This is provided as a convenience so that messages types not already handled can be sent.
+// This is provided as a convenience so that messages types not already handled can be sent. If the message
+// SequenceNumber field is less than 0, it will be automatically incremented using the internal counter.
 func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	if !c.synSent {
 		atomic.StoreInt64(&c.seqNum, 0)
 		msg.Flags = Syn
 		msg.SequenceNumber = c.seqNum
+	}
+
+	if msg.SequenceNumber < 0 {
+		atomic.StoreInt64(&c.seqNum, 1)
 	}
 
 	data, err := msg.MarshalBinary()
@@ -185,6 +189,11 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
 }
 
+// HandleMsg takes the unprocessed message bytes from the websocket connection (a la Read()), unmarshals the data
+// and takes the appropriate action based on the message type.  Messages which have an actionable payload (output
+// payload types, and channel closed payloads) will have that data returned.  Errors will be returned for unknown/
+// unhandled message or payload types.  A ChannelClosed message type will return an io.EOF error to indicate that
+// this SSM data channel is shutting down and should no longer be used.
 func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	m := new(AgentMessage)
 	if err := m.UnmarshalBinary(data); err != nil {
@@ -192,7 +201,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if err := c.SendAcknowledgeMessage(m); err != nil {
+	if err := c.sendAcknowledgeMessage(m); err != nil {
 		// todo - handle this better (retry?)
 		return nil, err
 	}
@@ -206,7 +215,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 			return m.Payload, nil
 		case HandshakeRequest:
 			// port forwarding session setup, we'll consider a handshake failure fatal
-			if err := c.ProcessHandshakeRequest(m); err != nil {
+			if err := c.processHandshakeRequest(m); err != nil {
 				return nil, err
 			}
 		case HandshakeComplete:
@@ -233,31 +242,6 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	return nil, nil
 }
 
-// ProcessHandshakeRequest handles the incoming handshake request message for a port forwarding session
-// and sends the required HandshakeResponse message.  This must complete before sending data over the
-// forwarded connection.
-func (c *SsmDataChannel) ProcessHandshakeRequest(msg *AgentMessage) error {
-	req := new(HandshakeRequestPayload)
-	if err := json.Unmarshal(msg.Payload, req); err != nil {
-		return err
-	}
-
-	payload, err := json.Marshal(buildHandshakeResponse(req.RequestedClientActions))
-	if err != nil {
-		return err
-	}
-
-	out := NewAgentMessage()
-	out.MessageType = InputStreamData
-	out.SequenceNumber = msg.SequenceNumber
-	out.Flags = Data
-	out.PayloadType = HandshakeResponse
-	out.Payload = payload
-
-	_, err = c.WriteMsg(out)
-	return err
-}
-
 // SetTerminalSize sends a message to the SSM service which indicates the size to use for the remote terminal
 // when using a shell session client
 func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
@@ -282,9 +266,45 @@ func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
 	return err
 }
 
-// SendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
+// TerminateSession sends the TerminateSession message to the AWS service to indicate that the port forwarding
+// session is ending, so it can clean up any connections used to communicate with the EC2 instance agent.
+func (c *SsmDataChannel) TerminateSession() error {
+	msg := NewAgentMessage()
+	msg.MessageType = InputStreamData
+	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
+	msg.Flags = Fin
+	msg.PayloadType = Flag
+
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(TerminateSession))
+	msg.Payload = buf
+
+	_, err := c.WriteMsg(msg)
+	return err
+}
+
+// DisconnectPort sends the DisconnectToPort message to the AWS service to indicate that a non-muxing stream is
+// shutting down and any connection used to communicate with the EC2 instance agent can be cleaned up.  Unlike
+// the TerminateSession action, the websocket connection is still capable of initiating a new port forwarding
+// stream to the agent without needing to restart the program.
+func (c *SsmDataChannel) DisconnectPort() error {
+	msg := NewAgentMessage()
+	msg.MessageType = InputStreamData
+	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
+	msg.Flags = Data
+	msg.PayloadType = Flag
+
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(DisconnectToPort))
+	msg.Payload = buf
+
+	_, err := c.WriteMsg(msg)
+	return err
+}
+
+// sendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
 // the web socket connection, which is required as part of the SSM session protocol
-func (c *SsmDataChannel) SendAcknowledgeMessage(msg *AgentMessage) error {
+func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {
 	ack := map[string]interface{}{
 		"AcknowledgedMessageType":           msg.MessageType,
 		"AcknowledgedMessageId":             msg.messageId.String(),
@@ -308,39 +328,28 @@ func (c *SsmDataChannel) SendAcknowledgeMessage(msg *AgentMessage) error {
 	return err
 }
 
-// TerminateSession sends the TerminateSession flag to the AWS service to indicate that the port forwarding
-// session is ending, and clean up any connections used to communicate with the EC2 instance agent.
-func (c *SsmDataChannel) TerminateSession() error {
-	msg := NewAgentMessage()
-	msg.MessageType = InputStreamData
-	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
-	msg.Flags = Fin
-	msg.PayloadType = Flag
+// processHandshakeRequest handles the incoming handshake request message for a port forwarding session
+// and sends the required HandshakeResponse message.  This must complete before sending data over the
+// forwarded connection.
+func (c *SsmDataChannel) processHandshakeRequest(msg *AgentMessage) error {
+	req := new(HandshakeRequestPayload)
+	if err := json.Unmarshal(msg.Payload, req); err != nil {
+		return err
+	}
 
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(TerminateSession))
-	msg.Payload = buf
+	payload, err := json.Marshal(buildHandshakeResponse(req.RequestedClientActions))
+	if err != nil {
+		return err
+	}
 
-	_, err := c.WriteMsg(msg)
-	return err
-}
+	out := NewAgentMessage()
+	out.MessageType = InputStreamData
+	out.SequenceNumber = msg.SequenceNumber
+	out.Flags = Data
+	out.PayloadType = HandshakeResponse
+	out.Payload = payload
 
-// DisconnectPort sends the DisconnectToPort flag to the AWS service to indicate that a non-muxing stream is
-// shutting down and any connection used to communicate with the EC2 instance agent can be cleaned up.  Unlike
-// the TerminateSession action, the connection is still capable of initiating a new port forwarding stream to
-// the agent without needing to restart the program.
-func (c *SsmDataChannel) DisconnectPort() error {
-	msg := NewAgentMessage()
-	msg.MessageType = InputStreamData
-	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
-	msg.Flags = Data
-	msg.PayloadType = Flag
-
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(DisconnectToPort))
-	msg.Payload = buf
-
-	_, err := c.WriteMsg(msg)
+	_, err = c.WriteMsg(out)
 	return err
 }
 

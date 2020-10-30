@@ -30,10 +30,6 @@ func main() {
 		}
 	}
 
-	if _, ok := os.LookupEnv("AWS_REGION"); !ok {
-		_ = os.Setenv("AWS_REGION", "us-east-1")
-	}
-
 	var port int
 	t, p, err := net.SplitHostPort(target)
 	if err == nil {
@@ -50,6 +46,10 @@ func main() {
 		RemotePort: port,
 	}
 
-	s := session.Must(session.NewSessionWithOptions(session.Options{Profile: profile}))
+	s := session.Must(session.NewSessionWithOptions(
+		session.Options{
+			Profile:           profile,
+			SharedConfigState: session.SharedConfigEnable,
+		}))
 	log.Fatal(ssmclient.SshSession(s, &in))
 }

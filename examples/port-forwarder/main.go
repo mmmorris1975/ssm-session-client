@@ -29,10 +29,6 @@ func main() {
 		}
 	}
 
-	if _, ok := os.LookupEnv("AWS_REGION"); !ok {
-		_ = os.Setenv("AWS_REGION", "us-east-1")
-	}
-
 	t, p, err := net.SplitHostPort(target)
 	if err != nil {
 		log.Fatal(err)
@@ -50,6 +46,10 @@ func main() {
 		LocalPort:  0, // just use random port for demo purposes (this is the default, if not set > 0)
 	}
 
-	s := session.Must(session.NewSessionWithOptions(session.Options{Profile: profile}))
+	s := session.Must(session.NewSessionWithOptions(
+		session.Options{
+			Profile:           profile,
+			SharedConfigState: session.SharedConfigEnable,
+		}))
 	log.Fatal(ssmclient.PortForwardingSession(s, &in))
 }

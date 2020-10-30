@@ -163,9 +163,8 @@ func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
 		sig := <-sigCh
 		log.Printf("Got signal: %s, shutting down", sig.String())
 
-		if err := c.TerminateSession(); err != nil {
-			log.Printf("error sending TerminateSession: %v", err)
-		}
+		_ = c.TerminateSession()
+		_ = c.Close()
 
 		os.Exit(0)
 	}()
