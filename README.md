@@ -20,8 +20,18 @@ SSH over SSM integration can be leveraged via the `ssmclient.SshSession()` funct
 a specialized form of port forwarding, the function takes the same arguments as `ssmclient.PortForwardingSession()`.
 The difference being that any LocalPort configuration is ignored, and if no RemotePort is provided, the defaule value
 of 22 is used.  See the [example](examples/ssm-ssh) for a simple implementation, which can be used in the SSH
-configuration to enable connecting via SSH.  More information can be found in the
-[AWS docs](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html)
+configuration to enable connecting via SSH.
+
+This feature is meant to be used in SSH configuration files according to the
+[AWS documentation](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html)
+except that the ProxyCommand syntax changes to:
+```
+ProxyCommand sh -c "name_of_program_using_this_library profile_name %h:%p"
+```
+Where profile_name is the AWS configuration profile to use (you should also be able to use the AWS_PROFILE environment
+variable, in which case the profile_name could be omitted), and %h:%p are standard SSH configuration substitutions for
+the host and port number to connect with, and can be left as-is.
+
 
 ## Target Lookup Helpers
 A couple of helper functions are available to assist with looking up values for EC2 instance IDs.  The
