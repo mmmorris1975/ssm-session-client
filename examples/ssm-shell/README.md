@@ -13,7 +13,7 @@ profile_name is the optional name of a profile configured in the local AWS confi
 the AWS_PROFILE environment variable will be checked. If the environment variable is unset, credentials set
 via environment variables, of the default profile credentials will be used
 
-target_spec is a required argument of the EC2 instnace ID to request a shell for.
+target_spec is a required argument of the EC2 instance ID to request a shell for.
 ```
 
 If successful, a command terminal prompt will be displayed which allows you to interact with the instance.
