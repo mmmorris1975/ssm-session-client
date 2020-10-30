@@ -20,12 +20,11 @@ func ShellSession(cfg client.ConfigProvider, target string) error {
 	}
 	defer c.Close()
 
-	// call initialize after doing ReaderChannel (so we process anything we need to do with the websocket)
-	// but before we start using Stdin with writePump()
+	// do platform-specific setup ... signal handling, stdin modification, etc...
 	if err := initialize(c); err != nil {
 		log.Fatal(err)
 	}
-	defer cleanup() // not called if terminated by a signal
+	defer cleanup() // platform-specific cleanup, not called if terminated by a signal
 
 	errCh := make(chan error, 5)
 	go func() {
