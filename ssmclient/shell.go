@@ -4,10 +4,10 @@ import (
 	"errors"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"io"
 	"log"
 	"os"
-	"ssm-session-client/datachannel"
 )
 
 // ShellSession starts a shell session with the instance specified in the target parameter.  The
