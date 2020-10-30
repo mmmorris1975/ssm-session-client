@@ -85,7 +85,7 @@ func (c *SsmDataChannel) Read(data []byte) (int, error) {
 	if err != nil {
 		// gorilla code states this is uber-fatal, and we just need to bail out
 		//log.Printf("ReadMessage freakout: %v", err)
-		if websocket.IsCloseError(err, 1006) {
+		if websocket.IsCloseError(err, 1000, 1001, 1006) {
 			err = io.EOF
 		}
 		return n, err
