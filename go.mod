@@ -1,4 +1,4 @@
-module ssm-session-client
+module github.com/mmmorris1975/ssm-session-client
 
 go 1.12
 
