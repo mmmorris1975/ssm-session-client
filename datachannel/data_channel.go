@@ -20,6 +20,7 @@ import (
 // with the AWS SSM messaging service
 type DataChannel interface {
 	Open(client.ConfigProvider, *ssm.StartSessionInput) error
+	HandleMsg(data []byte) ([]byte, error)
 	ProcessHandshakeRequest(*AgentMessage) error
 	SetTerminalSize(rows, cols uint32) error
 	SendAcknowledgeMessage(*AgentMessage) error
@@ -65,7 +66,6 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 	for {
 		select {
 		case <-c.handshakeCh:
-			log.Print("handshake complete")
 			return nil
 		default:
 			n, err := c.Read(buf)
@@ -108,7 +108,7 @@ func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 	for {
 		nr, err = c.Read(buf)
 		if err != nil {
-			log.Printf("WriteTo read error: %v", err)
+			//log.Printf("WriteTo read error: %v", err)
 			return n, err
 		}
 
@@ -119,7 +119,7 @@ func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 				nw, err = w.Write(payload)
 				n += int64(nw)
 				if err != nil {
-					log.Printf("WriteTo write error: %v", err)
+					//log.Printf("WriteTo write error: %v", err)
 					return n, err
 				}
 			}
@@ -136,7 +136,7 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 		nr, err = r.Read(buf)
 		n += int64(nr)
 		if err != nil {
-			log.Printf("ReadFrom read error: %v", err)
+			//log.Printf("ReadFrom read error: %v", err)
 			if errors.Is(err, io.EOF) {
 				// the contract of ReaderFrom states that io.EOF should not be returned, just
 				// exit the loop and return no error to indicate we are done
@@ -146,7 +146,7 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		if _, err = c.Write(buf[:nr]); err != nil {
-			log.Printf("ReadFrom write error: %v", err)
+			//log.Printf("ReadFrom write error: %v", err)
 			break
 		}
 	}
@@ -183,6 +183,54 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	defer c.mu.Unlock()
 	c.synSent = true
 	return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
+}
+
+func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
+	m := new(AgentMessage)
+	if err := m.UnmarshalBinary(data); err != nil {
+		// validation error
+		return nil, err
+	}
+
+	if err := c.SendAcknowledgeMessage(m); err != nil {
+		// todo - handle this better (retry?)
+		return nil, err
+	}
+
+	switch m.MessageType {
+	case Acknowledge:
+		// anything? other than avoiding the default case
+	case OutputStreamData:
+		switch m.PayloadType {
+		case Output:
+			return m.Payload, nil
+		case HandshakeRequest:
+			// port forwarding session setup, we'll consider a handshake failure fatal
+			if err := c.ProcessHandshakeRequest(m); err != nil {
+				return nil, err
+			}
+		case HandshakeComplete:
+			if c.handshakeCh != nil {
+				close(c.handshakeCh)
+			}
+		default:
+			return nil, fmt.Errorf("UNKNOWN INCOMING MSG PAYLOAD: %s\n%s", m, m.Payload)
+		}
+	case ChannelClosed:
+		payload := new(ChannelClosedPayload)
+		if err := json.Unmarshal(m.Payload, payload); err != nil {
+			return nil, err
+		}
+
+		var output []byte
+		if len(payload.Output) > 0 {
+			output = []byte(payload.Output)
+		}
+		return output, io.EOF
+	default:
+		return nil, fmt.Errorf("UNKNOWN MESSAGE TYPE: %+v", m)
+	}
+	return nil, nil
 }
 
 // ProcessHandshakeRequest handles the incoming handshake request message for a port forwarding session
@@ -325,54 +373,6 @@ func (c *SsmDataChannel) openDataChannel(token string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.ws.WriteJSON(openDataChanInput)
-}
-
-func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
-	m := new(AgentMessage)
-	if err := m.UnmarshalBinary(data); err != nil {
-		// validation error
-		return nil, err
-	}
-
-	if err := c.SendAcknowledgeMessage(m); err != nil {
-		// todo - handle this better (retry?)
-		return nil, err
-	}
-
-	switch m.MessageType {
-	case Acknowledge:
-		// anything? other than avoiding the default case
-	case OutputStreamData:
-		switch m.PayloadType {
-		case Output:
-			return m.Payload, nil
-		case HandshakeRequest:
-			// port forwarding session setup, we'll consider a handshake failure fatal
-			if err := c.ProcessHandshakeRequest(m); err != nil {
-				return nil, err
-			}
-		case HandshakeComplete:
-			if c.handshakeCh != nil {
-				close(c.handshakeCh)
-			}
-		default:
-			return nil, fmt.Errorf("UNKNOWN INCOMING MSG PAYLOAD: %s\n%s", m, m.Payload)
-		}
-	case ChannelClosed:
-		payload := new(ChannelClosedPayload)
-		if err := json.Unmarshal(m.Payload, payload); err != nil {
-			return nil, err
-		}
-
-		var output []byte
-		if len(payload.Output) > 0 {
-			output = []byte(payload.Output)
-		}
-		return output, io.EOF
-	default:
-		return nil, fmt.Errorf("UNKNOWN MESSAGE TYPE: %+v", m)
-	}
-	return nil, nil
 }
 
 // the only requirement of the handshake response is that we include an element in ProcessedClientActions

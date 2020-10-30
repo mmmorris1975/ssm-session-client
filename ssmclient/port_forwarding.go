@@ -1,7 +1,6 @@
 package ssmclient
 
 import (
-	"context"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/service/ssm"
@@ -53,6 +52,7 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	if err := c.WaitForHandshakeComplete(); err != nil {
 		return err
 	}
+	log.Print("handshake complete")
 
 	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(opts.LocalPort)))
 	if err != nil {
@@ -65,10 +65,11 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	defer lsnr.Close()
 	log.Printf("listening on %s", lsnr.Addr())
 
+	doneCh := make(chan bool)
 	errCh := make(chan error)
-	doneCh := make(chan bool, 1)
-	dataCh := make(chan []byte)
+	inCh := messageChannel(c, errCh)
 
+outer:
 	for {
 		var conn net.Conn
 		conn, err = lsnr.Accept()
@@ -79,65 +80,79 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 		}
 
 		go func() {
-			// read from conn and write to websocket (tx data to AWS)
-			// uses c.ReadFrom()
-			if _, err = io.Copy(c, conn); err != nil {
+			if _, err := io.Copy(c, conn); err != nil {
 				errCh <- err
 			}
 			doneCh <- true
-			log.Print("readfrom complete")
 		}()
 
-		ctx, cancel := context.WithCancel(context.Background())
-
-		go func() {
-			buf := make([]byte, 2048)
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					n, err := c.Read(buf)
-					if err != nil {
-						errCh <- err
-						return
-					}
-					dataCh <- buf[:n]
-				}
-			}
-		}()
-
-	outer:
+	inner:
 		for {
 			select {
 			case <-doneCh:
-				cancel()
-				break outer
-			case <-errCh:
-				cancel()
-				log.Print(err)
-				break outer
-			case msg := <-dataCh:
-				// todo process data
-				var payload []byte
-				payload, err = c.HandleMsg(msg)
-				if err != nil {
-					log.Print(err)
+				//log.Print("sending DisconnectPort")
+				_ = c.DisconnectPort()
+				break inner
+			case data, ok := <-inCh:
+				if ok {
+					if _, err = conn.Write(data); err != nil {
+						log.Print(err)
+					}
+				} else {
+					// incoming websocket channel is closed, which is fatal
+					_ = conn.Close()
 					break outer
 				}
-
-				_, err = conn.Write(payload)
-				if err != nil {
-					log.Print(err)
+			case er, ok := <-errCh:
+				if ok {
+					// any write to errCh means at least 1 of the goroutines has exited
+					log.Print(er)
+					break inner
+				} else {
+					// I can't think of a good reason why we'd ever end up here, but if we do
+					// we should stop the world
+					log.Print("errCh closed")
+					_ = conn.Close()
 					break outer
 				}
 			}
 		}
 
-		_ = c.DisconnectPort()
 		_ = conn.Close()
 	}
+	return nil
+}
+
+// read messages from websocket and write payload to the returned channel
+func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
+	inCh := make(chan []byte)
+
+	buf := make([]byte, 4096)
+	var payload []byte
+
+	go func() {
+		defer close(inCh)
+
+		for {
+			nr, err := c.Read(buf)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			payload, err = c.HandleMsg(buf[:nr])
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			if len(payload) > 0 {
+				inCh <- payload
+			}
+		}
+	}()
+
+	return inCh
 }
 
 // shared with ssh.go

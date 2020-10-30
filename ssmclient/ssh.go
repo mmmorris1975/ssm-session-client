@@ -43,6 +43,7 @@ func SshSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
 	if err := c.WaitForHandshakeComplete(); err != nil {
 		return err
 	}
+	log.Print("handshake complete")
 
 	errCh := make(chan error, 5)
 	go func() {
