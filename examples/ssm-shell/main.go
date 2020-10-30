@@ -2,9 +2,9 @@ package main
 
 import (
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/mmmorris1975/ssm-session-client/ssmclient"
 	"log"
 	"os"
-	"ssm-session-client/ssmclient"
 )
 
 // Start a SSM port forwarding session.
