@@ -179,7 +179,7 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	}
 
 	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIp))
-	if len(pubIp) > 1 {
+	if len(pubIp) > 0 {
 		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIp))
 	}
 
