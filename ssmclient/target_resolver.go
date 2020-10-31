@@ -118,7 +118,7 @@ func (r *dnsResolver) Resolve(target string) (string, error) {
 /*
  *  Tag Resolver attempts to find an instance using instance tags.  The expected format is tag_key:tag_value
  *  (ex. hostname:web0).  If the target to resolve doesn't look like a a colon-separated tag key:value pair,
- *  or no instance is found, an error is returned.  At most, 1 instance ID is returned, if more than 1 match
+ *  or no instance is found, an error is returned.  At most, 1 instance ID is returned; if more than 1 match
  *  is found, only the 1st element of the instances list is returned.  The nature of the AWS EC2 API will not
  *  guarantee ordering of the instances list.
  */
@@ -139,7 +139,9 @@ func (r *tagResolver) Resolve(target string) (string, error) {
 /*
  *  IP Resolver attempts to find an instance by its private or public IPv4 address using the EC2 API.
  *  If the target doesn't look like an IPv4 address, a DNS lookup is tried. If neither of those produce
- *  an IPv4 address, or the EC2 instance lookup fails to find an instance, an error is returned.
+ *  an IPv4 address, or the EC2 instance lookup fails to find an instance, an error is returned.  At most,
+ *  1 instance ID is returned; if more than 1 match is found, only the 1st element of the instances list
+ *  is returned.  The nature of the AWS EC2 API will not guarantee ordering of the instances list.
  */
 type ipResolver struct {
 	*ec2Resolver
@@ -178,6 +180,10 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 		return "", ErrInvalidTargetFormat
 	}
 
+	// prefer any public address on the instance since it's entirely possible that there may be VPCs with overlapping
+	// private IP space in an account and our DescribeInstances call will match any instance with that address,
+	// regardless of which VPC is resides in.  In cases where there is overlapping IP space, caller should use a more
+	// specific method for finding the instance, like tags.
 	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIp))
 	if len(pubIp) > 0 {
 		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIp))
