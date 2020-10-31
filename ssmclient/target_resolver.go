@@ -165,12 +165,10 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	for _, t := range targets {
 		// enforces that address is IPv4 or IPv6 address which can be represented as IPv4
 		if v := t.To4(); v != nil {
-			for _, n := range privateNets {
-				if n.Contains(v) {
-					privIp = append(privIp, v.String())
-				} else {
-					pubIp = append(pubIp, v.String())
-				}
+			if isPrivateAddr(v) {
+				privIp = append(privIp, v.String())
+			} else {
+				pubIp = append(pubIp, v.String())
 			}
 		}
 	}
@@ -186,6 +184,15 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	}
 
 	return r.ec2Resolver.Resolve(f)
+}
+
+func isPrivateAddr(addr net.IP) bool {
+	for _, n := range privateNets {
+		if n.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 /*
