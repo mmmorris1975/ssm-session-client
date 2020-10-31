@@ -39,18 +39,19 @@ A couple of helper functions are available to assist with looking up values for 
 using friendlier, or better known identifying information for an instance.
 
 The `ssmclient.ResolveTarget()` function uses a predetermined lookup order to find an instance.  If provided with a
-non-nil AWS SDK client.ConfigProvider (which can be satisfied with a session.Session), instance tags, or the private
-IPv4 address of the instance can be used.  If those avenues do not yield an instance ID, then a DNS TXT record lookup
-is performed.
+non-nil AWS SDK client.ConfigProvider (which can be satisfied with a session.Session), instance tags, or the public
+or private IPv4 address (or a DNS lookup which resolves to one of those) of the instance, can be used.  If those
+avenues do not yield an instance ID, then a DNS TXT record lookup is performed.
 
 The `ssmclient.ResolveTargetChain()` function accepts a varargs list of types implementing the TargetResolver interface
 to perform the instance ID resolution.  This allows custom resolution logic to be added in case the provided mechanisms
 prove insufficient.
 
 ## TODO
-  * Shell sessions to Windows EC2 instances and from Windows to anywhere.
+  * Shell sessions to Windows EC2 instances 
+  * Test client code on Windows to Linux and Windows instances.
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
-  * Robustness (retries/error recovery, out of order message handling)
+  * Robustness (retries/error recovery, nack retransmits, duplicate and out of order message handling)
 
 ## References
 The source code for the AWS SSM agent, which is a useful reference for grokking message formats, and the

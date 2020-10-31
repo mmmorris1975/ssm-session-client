@@ -18,6 +18,14 @@ var (
 	ErrInvalidTargetFormat = errors.New("invalid target format")
 	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance
 	ErrNoInstanceFound = errors.New("no instances returned from lookup")
+
+	// RFC 1918 and 6598 address blocks
+	privateNets = []net.IPNet{
+		{IP: net.ParseIP("10.0.0.0"), Mask: net.IPv4Mask(0xff, 0, 0, 0)},       // 10.0/8
+		{IP: net.ParseIP("172.16.0.0"), Mask: net.IPv4Mask(0xff, 0xf0, 0, 0)},  // 172.16/12
+		{IP: net.ParseIP("192.168.0.0"), Mask: net.IPv4Mask(0xff, 0xff, 0, 0)}, // 192.168/16
+		{IP: net.ParseIP("100.64.0.0"), Mask: net.IPv4Mask(0xff, 0xc0, 0, 0)},  // 100.64/10
+	}
 )
 
 // TargetResolver is the interface specification for something which knows how to resolve and EC2 instance identifier
@@ -36,15 +44,16 @@ func ResolveTarget(target string, cfg client.ConfigProvider) (string, error) {
 		resolvers = append(resolvers, NewTagResolver(cfg), NewIPResolver(cfg))
 	}
 
-	return ResolveTargetChain(target, append(resolvers, NewDNSResolver())...)
+	return ResolveTargetChain(strings.TrimSpace(target), append(resolvers, NewDNSResolver())...)
 }
 
 // ResolveTargetChain attempts to find the instance ID of the target using the provided list of TargetResolvers.
 // The first check will always be to see if the target is already in the format of an EC2 instance ID before
 // moving on to the resolution logic of the provided TargetResolvers.  If a resolver returns an error, the next
 // resolver in the chain is checked.  If all resolvers fail to find an instance ID an error is returned.
-func ResolveTargetChain(target string, resolvers ...TargetResolver) (string, error) {
-	matched, err := regexp.MatchString(`^i-[[:xdigit:]]{8,}$`, target)
+func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string, err error) {
+	var matched bool
+	matched, err = regexp.MatchString(`^i-[[:xdigit:]]{8,}$`, target)
 	if err != nil {
 		return "", err
 	}
@@ -54,11 +63,11 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (string, err
 	}
 
 	for _, res := range resolvers {
-		i, err := res.Resolve(target)
+		inst, err = res.Resolve(target)
 		if err != nil {
 			continue
 		}
-		return i, nil
+		return inst, nil
 	}
 	return "", ErrNoInstanceFound
 }
@@ -86,8 +95,7 @@ func NewDNSResolver() *dnsResolver {
 type dnsResolver bool
 
 func (r *dnsResolver) Resolve(target string) (string, error) {
-	trimmed := strings.TrimSpace(target)
-	rr, err := net.LookupTXT(trimmed)
+	rr, err := net.LookupTXT(strings.TrimSpace(target))
 	if err != nil {
 		return "", err
 	}
@@ -109,18 +117,17 @@ func (r *dnsResolver) Resolve(target string) (string, error) {
 
 /*
  *  Tag Resolver attempts to find an instance using instance tags.  The expected format is tag_key:tag_value
- *  (ex. hostname:web0).  If the data to resolve doesn't look like an IPv4 address, or no instance is found,
- *  an error is returned.  At most, 1 instance ID is returned, if more than 1 match is found, only the 1st
- *  element of the instances list is returned.  The nature of the AWS EC2 API will not guarantee ordering of
- *  the instances list.
+ *  (ex. hostname:web0).  If the target to resolve doesn't look like a a colon-separated tag key:value pair,
+ *  or no instance is found, an error is returned.  At most, 1 instance ID is returned, if more than 1 match
+ *  is found, only the 1st element of the instances list is returned.  The nature of the AWS EC2 API will not
+ *  guarantee ordering of the instances list.
  */
 type tagResolver struct {
 	*ec2Resolver
 }
 
 func (r *tagResolver) Resolve(target string) (string, error) {
-	trimmed := strings.TrimSpace(target)
-	spec := strings.SplitN(trimmed, `:`, 2)
+	spec := strings.SplitN(strings.TrimSpace(target), `:`, 2)
 	if len(spec) < 2 {
 		return "", ErrInvalidTargetFormat
 	}
@@ -130,25 +137,54 @@ func (r *tagResolver) Resolve(target string) (string, error) {
 }
 
 /*
- *  IP Resolver attempts to find an instance by its private IPv4 address using the EC2 API.
- *  If the data to resolve doesn't look like an IPv4 address, or no instance is found, an error is returned.
+ *  IP Resolver attempts to find an instance by its private or public IPv4 address using the EC2 API.
+ *  If the target doesn't look like an IPv4 address, a DNS lookup is tried. If neither of those produce
+ *  an IPv4 address, or the EC2 instance lookup fails to find an instance, an error is returned.
  */
 type ipResolver struct {
 	*ec2Resolver
 }
 
 func (r *ipResolver) Resolve(target string) (string, error) {
+	var pubIp, privIp []string
+	var targets []net.IP
+
 	trimmed := strings.TrimSpace(target)
-	matched, err := regexp.MatchString(`^\d{1,3}\.\d{1,3}\.\d{1,3}.\d{1,3}$`, trimmed)
-	if err != nil {
-		return "", err
+	ip := net.ParseIP(trimmed)
+	targets = []net.IP{ip}
+
+	if ip == nil {
+		// didn't look like an IP address, attempt DNS resolution ... maybe we'll find something there
+		if addrs, err := net.LookupIP(trimmed); err == nil {
+			targets = addrs
+		} else {
+			return "", ErrInvalidTargetFormat
+		}
 	}
 
-	if !matched {
+	for _, t := range targets {
+		// enforces that address is IPv4 or IPv6 address which can be represented as IPv4
+		if v := t.To4(); v != nil {
+			for _, n := range privateNets {
+				if n.Contains(v) {
+					privIp = append(privIp, v.String())
+				} else {
+					pubIp = append(pubIp, v.String())
+				}
+			}
+		}
+	}
+
+	// must resolve at least 1 public or private IPv4 address
+	if len(pubIp) < 1 && len(privIp) < 1 {
 		return "", ErrInvalidTargetFormat
 	}
 
-	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice([]string{trimmed}))
+	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIp))
+	if len(pubIp) > 1 {
+		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIp))
+	}
+
 	return r.ec2Resolver.Resolve(f)
 }
 
@@ -160,8 +196,8 @@ type ec2Resolver struct {
 	cfg client.ConfigProvider
 }
 
-func (r *ec2Resolver) Resolve(filter *ec2.Filter) (string, error) {
-	o, err := ec2.New(r.cfg).DescribeInstances(new(ec2.DescribeInstancesInput).SetFilters([]*ec2.Filter{filter}))
+func (r *ec2Resolver) Resolve(filter ...*ec2.Filter) (string, error) {
+	o, err := ec2.New(r.cfg).DescribeInstances(new(ec2.DescribeInstancesInput).SetFilters(filter))
 	if err != nil {
 		return "", err
 	}
