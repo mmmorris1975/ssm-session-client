@@ -16,7 +16,7 @@ const agentMsgHeaderLen = 116 // the binary size of all AgentMessage fields exce
 // AgentMessage is the structural representation of the binary format of an SSM agent message use for communication
 // between local clients (like this), and remote agents installed on EC2 instances.
 // This is the order the fields must appear as on the wire
-// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/agentmessage.go
+// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/agentmessage.go.
 type AgentMessage struct {
 	headerLength   uint32
 	MessageType    MessageType // this is a 32 byte space-padded string on the wire
@@ -31,7 +31,7 @@ type AgentMessage struct {
 	Payload        []byte
 }
 
-// NewAgentMessage creates an AgentMessage ready to load with payload
+// NewAgentMessage creates an AgentMessage ready to load with payload.
 func NewAgentMessage() *AgentMessage {
 	return &AgentMessage{
 		headerLength:  agentMsgHeaderLen,
@@ -41,7 +41,7 @@ func NewAgentMessage() *AgentMessage {
 	}
 }
 
-// ValidateMessage performs checks on the values of the AgentMessage to ensure they are sane
+// ValidateMessage performs checks on the values of the AgentMessage to ensure they are sane.
 func (m *AgentMessage) ValidateMessage() error {
 	// close_channel message header is 112 bytes
 	if m.headerLength > agentMsgHeaderLen || m.headerLength < agentMsgHeaderLen-4 {
@@ -77,7 +77,7 @@ func (m *AgentMessage) ValidateMessage() error {
 }
 
 // UnmarshalBinary reads the wire format data and updates the fields in the method receiver.  Satisfies the
-// encoding.BinaryUnmarshaler interface
+// encoding.BinaryUnmarshaler interface.
 func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	m.headerLength = binary.BigEndian.Uint32(data)
 	m.MessageType = parseMessageType(data[4:36])
@@ -101,7 +101,7 @@ func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 }
 
 // MarshalBinary converts the fields in the method receiver to the expected wire format used by the websocket
-// protocol with the SSM messaging service.  Satisfies the encoding.BinaryMarshaler interface
+// protocol with the SSM messaging service.  Satisfies the encoding.BinaryMarshaler interface.
 func (m *AgentMessage) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
@@ -179,12 +179,12 @@ func (m *AgentMessage) convertMessageType() []byte {
 
 func (m *AgentMessage) sha256PayloadDigest() []byte {
 	digest := sha256.New()
-	digest.Write(m.Payload)
+	_, _ = digest.Write(m.Payload)
 	m.payloadDigest = digest.Sum(nil)
 	return m.payloadDigest
 }
 
-// channel_closed message type is nul padded, others are space padded.  Handle both
+// channel_closed message type is nul padded, others are space padded.  Handle both.
 func parseMessageType(data []byte) MessageType {
 	return MessageType(bytes.TrimSpace(bytes.TrimRight(data, string(rune(0x00)))))
 }

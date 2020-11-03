@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 )
 
-// DataChannel is the interface definition for handling communication with the AWS SSM messaging service
+// DataChannel is the interface definition for handling communication with the AWS SSM messaging service.
 type DataChannel interface {
 	Open(client.ConfigProvider, *ssm.StartSessionInput) error
 	HandleMsg(data []byte) ([]byte, error)
@@ -29,7 +29,7 @@ type DataChannel interface {
 }
 
 // SsmDataChannel represents the data channel of the websocket connection used to communicate with the AWS
-// SSM service.  A new(SsmDataChannel) is ready for use, and should immediately call the Open() method
+// SSM service.  A new(SsmDataChannel) is ready for use, and should immediately call the Open() method.
 type SsmDataChannel struct {
 	seqNum      int64
 	mu          sync.Mutex
@@ -38,14 +38,14 @@ type SsmDataChannel struct {
 	handshakeCh chan bool
 }
 
-// Open creates the web socket connection with the AWS service and opens the data channel
+// Open creates the web socket connection with the AWS service and opens the data channel.
 func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
 	return c.startSession(cfg, in)
 }
 
 // Close shuts down the web socket connection with the AWS service. Type-specific actions (like sending
-// TerminateSession for port forwarding should be handled before calling Close()
+// TerminateSession for port forwarding should be handled before calling Close().
 func (c *SsmDataChannel) Close() error {
 	var err error
 	if c.ws != nil {
@@ -77,14 +77,14 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 }
 
 // Read will get a single message from the websocket connection. The unprocessed message is copied to the
-// requested []byte (which should be sized to handle at least 1536 bytes)
+// requested []byte (which should be sized to handle at least 1536 bytes).
 func (c *SsmDataChannel) Read(data []byte) (int, error) {
 	_, msg, err := c.ws.ReadMessage()
 	n := copy(data[:len(msg)], msg)
 
 	if err != nil {
 		// gorilla code states this is uber-fatal, and we just need to bail out
-		//log.Printf("ReadMessage freakout: %v", err)
+		// log.Printf("ReadMessage freakout: %v", err)
 		if websocket.IsCloseError(err, 1000, 1001, 1006) {
 			err = io.EOF
 		}
@@ -98,7 +98,7 @@ func (c *SsmDataChannel) Read(data []byte) (int, error) {
 	return n, nil
 }
 
-// WriteTo uses the data channel as an io.Copy read source, writing output to the provided writer
+// WriteTo uses the data channel as an io.Copy read source, writing output to the provided writer.
 func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 	buf := make([]byte, 2048)
 	var nr, nw int
@@ -107,18 +107,21 @@ func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 	for {
 		nr, err = c.Read(buf)
 		if err != nil {
-			//log.Printf("WriteTo read error: %v", err)
+			// log.Printf("WriteTo read error: %v", err)
 			return n, err
 		}
 
 		if nr > 0 {
 			payload, err = c.HandleMsg(buf[:nr])
+			if err != nil {
+				return int64(nw), err
+			}
 
 			if len(payload) > 0 {
 				nw, err = w.Write(payload)
 				n += int64(nw)
 				if err != nil {
-					//log.Printf("WriteTo write error: %v", err)
+					// log.Printf("WriteTo write error: %v", err)
 					return n, err
 				}
 			}
@@ -126,7 +129,7 @@ func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 	}
 }
 
-// ReadFrom uses the data channel as an io.Copy write destination, reading data from the provided reader
+// ReadFrom uses the data channel as an io.Copy write destination, reading data from the provided reader.
 func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, 1536) // 1536 appears to be a default websocket max packet size
 	var nr int
@@ -135,7 +138,7 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 		nr, err = r.Read(buf)
 		n += int64(nr)
 		if err != nil {
-			//log.Printf("ReadFrom read error: %v", err)
+			// log.Printf("ReadFrom read error: %v", err)
 			if errors.Is(err, io.EOF) {
 				// the contract of ReaderFrom states that io.EOF should not be returned, just
 				// exit the loop and return no error to indicate we are done
@@ -145,14 +148,14 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		if _, err = c.Write(buf[:nr]); err != nil {
-			//log.Printf("ReadFrom write error: %v", err)
+			// log.Printf("ReadFrom write error: %v", err)
 			break
 		}
 	}
 	return
 }
 
-// Write sends an input stream data message type with the provided payload bytes as the message payload
+// Write sends an input stream data message type with the provided payload bytes as the message payload.
 func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	msg := NewAgentMessage()
 	msg.MessageType = InputStreamData
@@ -243,7 +246,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 }
 
 // SetTerminalSize sends a message to the SSM service which indicates the size to use for the remote terminal
-// when using a shell session client
+// when using a shell session client.
 func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
 	input := map[string]uint32{
 		"rows": rows,
@@ -303,7 +306,7 @@ func (c *SsmDataChannel) DisconnectPort() error {
 }
 
 // sendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
-// the web socket connection, which is required as part of the SSM session protocol
+// the web socket connection, which is required as part of the SSM session protocol.
 func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {
 	ack := map[string]interface{}{
 		"AcknowledgedMessageType":           msg.MessageType,
@@ -359,7 +362,7 @@ func (c *SsmDataChannel) startSession(cfg client.ConfigProvider, in *ssm.StartSe
 		return err
 	}
 
-	c.ws, _, err = websocket.DefaultDialer.Dial(*out.StreamUrl, http.Header{})
+	c.ws, _, err = websocket.DefaultDialer.Dial(*out.StreamUrl, http.Header{}) //nolint:bodyclose
 	if err != nil {
 		return err
 	}

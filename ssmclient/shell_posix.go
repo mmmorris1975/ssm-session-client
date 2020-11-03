@@ -43,6 +43,7 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 	return sigCh
 }
 
+// see also: https://godoc.org/golang.org/x/crypto/ssh/terminal#GetSize.
 func getWinSize() (rows, cols uint32, err error) {
 	var sz *unix.Winsize
 

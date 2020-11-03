@@ -22,9 +22,9 @@ func ShellSession(cfg client.ConfigProvider, target string) error {
 
 	// do platform-specific setup ... signal handling, stdin modification, etc...
 	if err := initialize(c); err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer cleanup() // platform-specific cleanup, not called if terminated by a signal
+	defer cleanup() //nolint:errcheck // platform-specific cleanup, not called if terminated by a signal
 
 	errCh := make(chan error, 5)
 	go func() {
@@ -58,6 +58,6 @@ func updateTermSize(c datachannel.DataChannel) error {
 		cols = 132
 	}
 
-	//log.Printf("sending set size: rows: %d, cols: %d", rows, cols)
+	// log.Printf("sending set size: rows: %d, cols: %d", rows, cols)
 	return c.SetTerminalSize(rows, cols)
 }

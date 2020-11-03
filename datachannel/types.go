@@ -6,7 +6,7 @@ import (
 )
 
 // MessageType is the label used in the AgentMessage.MessageType field
-// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/model.go
+// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/model.go.
 type MessageType string
 
 const (
@@ -22,7 +22,7 @@ const (
 	StartPublication MessageType = "start_publication"
 )
 
-// AgentMessageFlag is the value set in the AgentMessage.Flags field to indicate where in the stream this message belongs
+// AgentMessageFlag is the value set in the AgentMessage.Flags field to indicate where in the stream this message belongs.
 type AgentMessageFlag uint64
 
 const (
@@ -32,7 +32,7 @@ const (
 	Ack  AgentMessageFlag = iota
 )
 
-// PayloadType is the value set in the AgentMessage.PayloadType field to indicate the data format of the Payload field
+// PayloadType is the value set in the AgentMessage.PayloadType field to indicate the data format of the Payload field.
 type PayloadType uint32
 
 const (
@@ -58,7 +58,7 @@ const (
 	ConnectToPortError PayloadTypeFlag = 3
 )
 
-// ActionType is used in Handshake to determine action requested by the agent
+// ActionType is used in Handshake to determine action requested by the agent.
 type ActionType string
 
 const (
@@ -66,7 +66,7 @@ const (
 	SessionType   ActionType = "SessionType"
 )
 
-// ActionStatus is use to communicate the result of an ActionType
+// ActionStatus is use to communicate the result of an ActionType.
 type ActionStatus int
 
 const (
@@ -75,26 +75,26 @@ const (
 	Unsupported ActionStatus = 3
 )
 
-// HandshakeRequestPayload is the data format sent from the agent to initiate a session handshake
+// HandshakeRequestPayload is the data format sent from the agent to initiate a session handshake.
 type HandshakeRequestPayload struct {
 	AgentVersion           string
 	RequestedClientActions []RequestedClientAction
 }
 
-// RequestedClientAction is the type of actions requested as part of the handshake negotiation
+// RequestedClientAction is the type of actions requested as part of the handshake negotiation.
 type RequestedClientAction struct {
 	ActionType       ActionType
 	ActionParameters interface{}
 }
 
-// SessionTypeRequest is part of the handshake process
+// SessionTypeRequest is part of the handshake process.
 type SessionTypeRequest struct {
 	SessionType string
 	Properties  interface{}
 }
 
 // HandshakeResponsePayload is the local client response to the offered handshake request.  The ProcessedClientActions
-// field should have an entry for each RequestedClientActions in the handshake request
+// field should have an entry for each RequestedClientActions in the handshake request.
 type HandshakeResponsePayload struct {
 	ClientVersion          string
 	ProcessedClientActions []ProcessedClientAction
@@ -109,13 +109,13 @@ type ProcessedClientAction struct {
 	Error        string
 }
 
-// HandshakeCompletePayload is the message returned from the agent when the handshake negotiation is successful
+// HandshakeCompletePayload is the message returned from the agent when the handshake negotiation is successful.
 type HandshakeCompletePayload struct {
 	HandshakeTimeToComplete time.Duration
 	CustomerMessage         string
 }
 
-// ChannelClosedPayload is the payload in a ChannelClosed message send from the agent
+// ChannelClosedPayload is the payload in a ChannelClosed message send from the agent.
 type ChannelClosedPayload struct {
 	MessageType   string
 	MessageId     string

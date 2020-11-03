@@ -96,7 +96,7 @@ outer:
 		for {
 			select {
 			case <-doneCh:
-				//log.Print("sending DisconnectPort")
+				// log.Print("sending DisconnectPort")
 				// basic (non-muxing) connections support DisconnectPort to signal to the remote agent that
 				// we are shutting down this particular connection on our end, and possibly expect a new one.
 				_ = c.DisconnectPort()
@@ -131,7 +131,7 @@ outer:
 	return nil
 }
 
-// read messages from websocket and write payload to the returned channel
+// read messages from websocket and write payload to the returned channel.
 func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 	inCh := make(chan []byte)
 
@@ -163,7 +163,7 @@ func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 	return inCh
 }
 
-// shared with ssh.go
+// shared with ssh.go.
 func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)

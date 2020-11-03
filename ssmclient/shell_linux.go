@@ -15,6 +15,7 @@ func cleanup() error {
 	return nil
 }
 
+// see also: https://godoc.org/golang.org/x/crypto/ssh/terminal#MakeRaw.
 func configureStdin() (err error) {
 	origTermios, err = unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS)
 	if err != nil {

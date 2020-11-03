@@ -14,12 +14,12 @@ import (
 
 var (
 	// ErrInvalidTargetFormat is the error returned if the target format doesn't match the expected format
-	// required by the resolver
+	// required by the resolver.
 	ErrInvalidTargetFormat = errors.New("invalid target format")
-	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance
+	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance.
 	ErrNoInstanceFound = errors.New("no instances returned from lookup")
 
-	// RFC 1918 and 6598 address blocks
+	// RFC 1918 and 6598 address blocks.
 	privateNets = []net.IPNet{
 		{IP: net.ParseIP("10.0.0.0"), Mask: net.IPv4Mask(0xff, 0, 0, 0)},       // 10.0/8
 		{IP: net.ParseIP("172.16.0.0"), Mask: net.IPv4Mask(0xff, 0xf0, 0, 0)},  // 172.16/12
@@ -28,7 +28,7 @@ var (
 	}
 )
 
-// TargetResolver is the interface specification for something which knows how to resolve and EC2 instance identifier
+// TargetResolver is the interface specification for something which knows how to resolve and EC2 instance identifier.
 type TargetResolver interface {
 	Resolve(string) (string, error)
 }
@@ -77,12 +77,12 @@ func NewTagResolver(cfg client.ConfigProvider) *tagResolver {
 	return &tagResolver{&ec2Resolver{cfg: cfg}}
 }
 
-// NewIPResolver is a TargetResolver which knows how to find an EC2 instance using the private IPv4 address
+// NewIPResolver is a TargetResolver which knows how to find an EC2 instance using the private IPv4 address.
 func NewIPResolver(cfg client.ConfigProvider) *ipResolver {
 	return &ipResolver{&ec2Resolver{cfg: cfg}}
 }
 
-// NewDNSResolver is a TargetResolver which knows how to find an EC2 instance using DNS TXT record lookups
+// NewDNSResolver is a TargetResolver which knows how to find an EC2 instance using DNS TXT record lookups.
 func NewDNSResolver() *dnsResolver {
 	return new(dnsResolver)
 }
@@ -100,14 +100,9 @@ func (r *dnsResolver) Resolve(target string) (string, error) {
 		return "", err
 	}
 
-	var matched bool
+	re := regexp.MustCompile(`^i-[[:xdigit:]]{8,}$`)
 	for _, rec := range rr {
-		matched, err = regexp.MatchString(`^i-[[:xdigit:]]{8,}$`, rec)
-		if err != nil {
-			continue
-		}
-
-		if matched {
+		if re.MatchString(rec) {
 			return rec, nil
 		}
 	}
