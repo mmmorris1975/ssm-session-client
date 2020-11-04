@@ -16,47 +16,52 @@ linters-settings:
   maligned:
     suggest-new: true
 
+#
 linters:
   disable-all: true
   enable:
-    - bodyclose
+    # These are the default linters
     - deadcode
-    - depguard
-    - dogsled
-    - dupl
     - errcheck
-    - exhaustive
-    - funlen
-    - gochecknoinits
-    #- goconst
-    - gocritic
-    - gocyclo
-    - godot
-    - gofmt
-    - goimports
-    - golint
-    #- gomnd
-    - goprintffuncname
-    - gosec
     - gosimple
     - govet
     - ineffassign
-    #- interfacer
-    - lll
-    - maligned
-    - misspell
-    - nakedret
-    - noctx
-    - nolintlint
-    - prealloc
-    - rowserrcheck
-    - scopelint
     - staticcheck
     - structcheck
-    - stylecheck
     - typecheck
-    - unconvert
-    - unparam
     - unused
     - varcheck
-    - whitespace
+
+    # These are some of the not enabled by default linters
+    - bodyclose
+    #- depguard
+    #- dogsled
+    #- dupl
+    #- exhaustive
+    - funlen
+    #- gochecknoinits
+    #- goconst
+    - gocritic
+    - gocognit
+    - gocyclo
+    - godot
+    - gofmt
+    #- goimports
+    - golint
+    #- gomnd
+    #- goprintffuncname
+    - gosec
+    #- interfacer
+    #- lll
+    #- maligned
+    #- misspell
+    #- nakedret
+    - noctx
+    #- nolintlint
+    #- prealloc
+    #- rowserrcheck
+    #- scopelint
+    #- stylecheck
+    - unconvert
+    - unparam
+    #- whitespace

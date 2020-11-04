@@ -29,9 +29,7 @@ func installSignalHandlers(c datachannel.DataChannel) chan os.Signal {
 		case unix.SIGWINCH:
 			// some terminal applications may not fire this signal when resizing (don't see it on MacOS) :(
 			// plus, does Go implement sigwinch internally for windows? (we know the OS proper doesn't)
-			if err := updateTermSize(c); err != nil {
-				// todo handle error (datachannel.SetTerminalSize error)
-			}
+			_ = updateTermSize(c) // todo handle error? (datachannel.SetTerminalSize error)
 		case os.Interrupt, unix.SIGQUIT, unix.SIGTERM:
 			log.Print("exiting")
 			_ = cleanup()

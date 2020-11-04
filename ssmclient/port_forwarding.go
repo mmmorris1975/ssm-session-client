@@ -28,19 +28,11 @@ type PortForwardingInput struct {
 // PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
 // configure the session.  The client.ConfigProvider parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
+//nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
 func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
-	in := &ssm.StartSessionInput{
-		DocumentName: aws.String("AWS-StartPortForwardingSession"),
-		Target:       aws.String(opts.Target),
-		Parameters: map[string][]*string{
-			"localPortNumber": {aws.String(strconv.Itoa(opts.LocalPort))},
-			"portNumber":      {aws.String(strconv.Itoa(opts.RemotePort))},
-		},
-	}
-
-	c := new(datachannel.SsmDataChannel)
-	if err := c.Open(cfg, in); err != nil {
-		return err
+	c, err := openDataChannel(cfg, opts)
+	if err != nil {
+		return nil
 	}
 	defer func() {
 		// Both the basic and muxing plugins support TerminateSession on the agent side.
@@ -54,20 +46,16 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	// possibility that the data channel is still valid
 	installSignalHandler(c)
 
-	log.Print("waiting for handshake")
-	if err := c.WaitForHandshakeComplete(); err != nil {
+	// log.Print("waiting for handshake")
+	if err = c.WaitForHandshakeComplete(); err != nil {
 		return err
 	}
-	log.Print("handshake complete")
+	// log.Print("handshake complete")
 
-	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(opts.LocalPort)))
+	lsnr, err := createListener(opts.LocalPort)
 	if err != nil {
 		return err
 	}
-
-	// use limit listener for now, eventually maybe we'll add muxing
-	// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/plugins/port/port_mux.go
-	lsnr := netutil.LimitListener(l, 1)
 	defer lsnr.Close()
 	log.Printf("listening on %s", lsnr.Addr())
 
@@ -86,6 +74,7 @@ outer:
 		}
 
 		go func() {
+			// handle incoming messages from AWS in the background
 			if _, e := io.Copy(c, conn); e != nil {
 				errCh <- e
 			}
@@ -102,33 +91,50 @@ outer:
 				_ = c.DisconnectPort()
 				break inner
 			case data, ok := <-inCh:
-				if ok {
-					if _, err = conn.Write(data); err != nil {
-						log.Print(err)
-					}
-				} else {
+				if !ok {
 					// incoming websocket channel is closed, which is fatal
 					_ = conn.Close()
 					break outer
 				}
+
+				if _, err = conn.Write(data); err != nil {
+					log.Print(err)
+				}
 			case er, ok := <-errCh:
-				if ok {
-					// any write to errCh means at least 1 of the goroutines has exited
-					log.Print(er)
-					break inner
-				} else {
+				if !ok {
 					// I can't think of a good reason why we'd ever end up here, but if we do
 					// we should stop the world
 					log.Print("errCh closed")
 					_ = conn.Close()
 					break outer
 				}
+
+				// any write to errCh means at least 1 of the goroutines has exited
+				log.Print(er)
+				break inner
 			}
 		}
 
 		_ = conn.Close()
 	}
 	return nil
+}
+
+func openDataChannel(cfg client.ConfigProvider, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
+	in := &ssm.StartSessionInput{
+		DocumentName: aws.String("AWS-StartPortForwardingSession"),
+		Target:       aws.String(opts.Target),
+		Parameters: map[string][]*string{
+			"localPortNumber": {aws.String(strconv.Itoa(opts.LocalPort))},
+			"portNumber":      {aws.String(strconv.Itoa(opts.RemotePort))},
+		},
+	}
+
+	c := new(datachannel.SsmDataChannel)
+	if err := c.Open(cfg, in); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // read messages from websocket and write payload to the returned channel.
@@ -161,6 +167,17 @@ func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 	}()
 
 	return inCh
+}
+
+func createListener(port int) (net.Listener, error) {
+	l, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(port)))
+	if err != nil {
+		return nil, err
+	}
+
+	// use limit listener for now, eventually maybe we'll add muxing
+	// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/plugins/port/port_mux.go
+	return netutil.LimitListener(l, 1), nil
 }
 
 // shared with ssh.go.

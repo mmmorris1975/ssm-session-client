@@ -152,11 +152,11 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 
 	if ip == nil {
 		// didn't look like an IP address, attempt DNS resolution ... maybe we'll find something there
-		if addrs, err := net.LookupIP(trimmed); err == nil {
-			targets = addrs
-		} else {
+		addrs, err := net.LookupIP(trimmed)
+		if err == nil {
 			return "", ErrInvalidTargetFormat
 		}
+		targets = addrs
 	}
 
 	for _, t := range targets {
@@ -164,9 +164,9 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 		if v := t.To4(); v != nil {
 			if isPrivateAddr(v) {
 				privIP = append(privIP, v.String())
-			} else {
-				pubIP = append(pubIP, v.String())
+				continue
 			}
+			pubIP = append(pubIP, v.String())
 		}
 	}
 
