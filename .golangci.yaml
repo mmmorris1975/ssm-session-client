@@ -3,6 +3,9 @@ run:
   timeout: 5m
 
 linters-settings:
+  funlen:
+    lines: 75
+    statements: 50
   gocognit:
     min-complexity: 15
   gocyclo:
@@ -12,11 +15,10 @@ linters-settings:
   govet:
     check-shadowing: true
   lll:
-    line-length: 140
+    line-length: 132
   maligned:
     suggest-new: true
 
-#
 linters:
   disable-all: true
   enable:
