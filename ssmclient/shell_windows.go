@@ -4,6 +4,7 @@ package ssmclient
 
 import (
 	"errors"
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
 func initialize(c datachannel.DataChannel) error {
