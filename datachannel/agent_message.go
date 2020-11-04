@@ -17,6 +17,7 @@ const agentMsgHeaderLen = 116 // the binary size of all AgentMessage fields exce
 // between local clients (like this), and remote agents installed on EC2 instances.
 // This is the order the fields must appear as on the wire
 // REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/agentmessage.go.
+//nolint:maligned
 type AgentMessage struct {
 	headerLength   uint32
 	MessageType    MessageType // this is a 32 byte space-padded string on the wire
@@ -24,7 +25,7 @@ type AgentMessage struct {
 	createdDate    time.Time // wire format is milliseconds since unix epoch (uint64), value set to time.Now() in NewAgentMessage
 	SequenceNumber int64
 	Flags          AgentMessageFlag // REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/agentmessage.go
-	messageId      uuid.UUID        // 16 byte UUID, auto-generated in NewAgentMessage
+	messageID      uuid.UUID        // 16 byte UUID, auto-generated in NewAgentMessage
 	payloadDigest  []byte           // SHA256 digest, value calculated in MarshalBinary
 	PayloadType    PayloadType      // REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/contracts/model.go
 	payloadLength  uint32           // value calculated in MarshalBinary
@@ -37,7 +38,7 @@ func NewAgentMessage() *AgentMessage {
 		headerLength:  agentMsgHeaderLen,
 		schemaVersion: 1,
 		createdDate:   time.Now(),
-		messageId:     uuid.New(),
+		messageID:     uuid.New(),
 	}
 }
 
@@ -61,7 +62,7 @@ func (m *AgentMessage) ValidateMessage() error {
 		return errors.New("invalid message date")
 	}
 
-	if len(m.messageId[:]) != 16 {
+	if len(m.messageID[:]) != 16 {
 		return errors.New("invalid message id")
 	}
 
@@ -85,7 +86,7 @@ func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 	m.createdDate = parseTime(data[40:48])
 	m.SequenceNumber = int64(binary.BigEndian.Uint64(data[48:56]))
 	m.Flags = AgentMessageFlag(binary.BigEndian.Uint64(data[56:64]))
-	m.messageId = uuid.Must(uuid.FromBytes(formatUuidBytes(data[64:80])))
+	m.messageID = uuid.Must(uuid.FromBytes(formatUUIDBytes(data[64:80])))
 	m.payloadDigest = data[80 : 80+sha256.Size]
 
 	// The channel_closed message has a header length of 112 bytes, assuming this is what's dropped
@@ -131,7 +132,7 @@ func (m *AgentMessage) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 	// []byte values are written directly (no endian-ness), but for consistency's sake ...
-	if err := binary.Write(buf, binary.BigEndian, formatUuidBytes(m.messageId[:])); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, formatUUIDBytes(m.messageID[:])); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(buf, binary.BigEndian, m.payloadDigest[:sha256.Size]); err != nil {
@@ -156,7 +157,7 @@ func (m *AgentMessage) String() string {
 	sb.WriteString(fmt.Sprintf("TYPE: %s, ", m.MessageType))
 	sb.WriteString(fmt.Sprintf("SCHEMA VERSION: %d, ", m.schemaVersion))
 	sb.WriteString(fmt.Sprintf("SEQUENCE: %d, ", m.SequenceNumber))
-	sb.WriteString(fmt.Sprintf("MESSAGE ID: %s, ", m.messageId))
+	sb.WriteString(fmt.Sprintf("MESSAGE ID: %s, ", m.messageID))
 	sb.WriteString(fmt.Sprintf("PAYLOAD TYPE: %d, ", m.PayloadType))
 	sb.WriteString(fmt.Sprintf("PAYLOAD LENGTH: %d", m.payloadLength))
 	sb.WriteString(fmt.Sprintln("}"))
@@ -195,6 +196,6 @@ func parseTime(data []byte) time.Time {
 	return time.Unix(0, d.Nanoseconds())
 }
 
-func formatUuidBytes(data []byte) []byte {
+func formatUUIDBytes(data []byte) []byte {
 	return append(data[8:], data[:8]...)
 }

@@ -118,9 +118,9 @@ type HandshakeCompletePayload struct {
 // ChannelClosedPayload is the payload in a ChannelClosed message send from the agent.
 type ChannelClosedPayload struct {
 	MessageType   string
-	MessageId     string
-	DestinationId string
-	SessionId     string
+	MessageID     string
+	DestinationID string
+	SessionID     string
 	SchemaVersion int
 	CreatedDate   string
 	Output        string

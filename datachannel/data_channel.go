@@ -209,6 +209,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	//nolint:exhaustive // we'll add more as we find them
 	switch m.MessageType {
 	case Acknowledge:
 		// anything? other than avoiding the default case
@@ -310,7 +311,7 @@ func (c *SsmDataChannel) DisconnectPort() error {
 func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {
 	ack := map[string]interface{}{
 		"AcknowledgedMessageType":           msg.MessageType,
-		"AcknowledgedMessageId":             msg.messageId.String(),
+		"AcknowledgedMessageId":             msg.messageID.String(),
 		"AcknowledgedMessageSequenceNumber": msg.SequenceNumber,
 		"IsSequentialMessage":               true,
 	}

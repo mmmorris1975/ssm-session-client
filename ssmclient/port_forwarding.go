@@ -86,8 +86,8 @@ outer:
 		}
 
 		go func() {
-			if _, err := io.Copy(c, conn); err != nil {
-				errCh <- err
+			if _, e := io.Copy(c, conn); e != nil {
+				errCh <- e
 			}
 			doneCh <- true
 		}()
@@ -164,7 +164,7 @@ func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 }
 
 // shared with ssh.go.
-func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
+func installSignalHandler(c datachannel.DataChannel) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
@@ -176,5 +176,4 @@ func installSignalHandler(c datachannel.DataChannel) chan os.Signal {
 
 		os.Exit(0)
 	}()
-	return sigCh
 }

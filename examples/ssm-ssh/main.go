@@ -51,5 +51,5 @@ func main() {
 			Profile:           profile,
 			SharedConfigState: session.SharedConfigEnable,
 		}))
-	log.Fatal(ssmclient.SshSession(s, &in))
+	log.Fatal(ssmclient.SSHSession(s, &in))
 }

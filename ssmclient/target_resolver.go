@@ -143,7 +143,7 @@ type ipResolver struct {
 }
 
 func (r *ipResolver) Resolve(target string) (string, error) {
-	var pubIp, privIp []string
+	var pubIP, privIP []string
 	var targets []net.IP
 
 	trimmed := strings.TrimSpace(target)
@@ -163,15 +163,15 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 		// enforces that address is IPv4 or IPv6 address which can be represented as IPv4
 		if v := t.To4(); v != nil {
 			if isPrivateAddr(v) {
-				privIp = append(privIp, v.String())
+				privIP = append(privIP, v.String())
 			} else {
-				pubIp = append(pubIp, v.String())
+				pubIP = append(pubIP, v.String())
 			}
 		}
 	}
 
 	// must resolve at least 1 public or private IPv4 address
-	if len(pubIp) < 1 && len(privIp) < 1 {
+	if len(pubIP) < 1 && len(privIP) < 1 {
 		return "", ErrInvalidTargetFormat
 	}
 
@@ -179,9 +179,9 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	// private IP space in an account and our DescribeInstances call will match any instance with that address,
 	// regardless of which VPC is resides in.  In cases where there is overlapping IP space, caller should use a more
 	// specific method for finding the instance, like tags.
-	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIp))
-	if len(pubIp) > 0 {
-		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIp))
+	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIP))
+	if len(pubIP) > 0 {
+		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIP))
 	}
 
 	return r.ec2Resolver.Resolve(f)

@@ -12,12 +12,12 @@ import (
 	"strconv"
 )
 
-// SshSession starts a specialized port forwarding session to allow SSH connectivity to the target instance over
+// SSHSession starts a specialized port forwarding session to allow SSH connectivity to the target instance over
 // the SSM session.  It listens for data from Stdin and sends output to Stdout.  Like a port forwarding session,
 // use a PortForwardingInput type to configure the session properties.  Any LocalPort information is ignored, and
 // if no RemotePort is specified, the default SSH port (22) will be used. The client.ConfigProvider parameter is
 // used to call the AWS SSM StartSession API, which is used as part of establishing the websocket communication channel.
-func SshSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
+func SSHSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
 	var port = "22"
 	if opts.RemotePort > 0 {
 		port = strconv.Itoa(opts.RemotePort)
