@@ -205,6 +205,7 @@ type ec2Resolver struct {
 }
 
 func (r *ec2Resolver) Resolve(filter ...*ec2.Filter) (string, error) {
+	filter = append(filter, new(ec2.Filter).SetName("instance-state-name").SetValues([]*string{aws.String("running")}))
 	o, err := ec2.New(r.cfg).DescribeInstances(new(ec2.DescribeInstancesInput).SetFilters(filter))
 	if err != nil {
 		return "", err
