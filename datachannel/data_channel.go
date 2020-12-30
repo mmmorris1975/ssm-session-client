@@ -211,7 +211,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 
 	//nolint:exhaustive // we'll add more as we find them
 	switch m.MessageType {
-	case Acknowledge:
+	case Acknowledge, PausePublication, StartPublication:
 		// anything? other than avoiding the default case
 	case OutputStreamData:
 		switch m.PayloadType {
