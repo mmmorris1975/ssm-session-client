@@ -58,6 +58,5 @@ func updateTermSize(c datachannel.DataChannel) error {
 		cols = 132
 	}
 
-	// log.Printf("sending set size: rows: %d, cols: %d", rows, cols)
 	return c.SetTerminalSize(rows, cols)
 }

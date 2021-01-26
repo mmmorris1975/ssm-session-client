@@ -46,11 +46,9 @@ func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput)
 	// possibility that the data channel is still valid
 	installSignalHandler(c)
 
-	// log.Print("waiting for handshake")
 	if err = c.WaitForHandshakeComplete(); err != nil {
 		return err
 	}
-	// log.Print("handshake complete")
 
 	lsnr, err := createListener(opts.LocalPort)
 	if err != nil {
@@ -85,7 +83,6 @@ outer:
 		for {
 			select {
 			case <-doneCh:
-				// log.Print("sending DisconnectPort")
 				// basic (non-muxing) connections support DisconnectPort to signal to the remote agent that
 				// we are shutting down this particular connection on our end, and possibly expect a new one.
 				_ = c.DisconnectPort()
