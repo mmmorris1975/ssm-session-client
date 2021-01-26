@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // DataChannel is the interface definition for handling communication with the AWS SSM messaging service.
@@ -36,11 +37,17 @@ type SsmDataChannel struct {
 	ws          *websocket.Conn
 	synSent     bool
 	handshakeCh chan bool
+	pausePub    bool
+	outMsgBuf   MessageBuffer
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
 func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
+	c.outMsgBuf = NewMessageBuffer(50)
+
+	go c.processOutboundQueue()
+
 	return c.startSession(cfg, in)
 }
 
@@ -167,6 +174,21 @@ func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	return c.WriteMsg(msg)
 }
 
+func (c *SsmDataChannel) processOutboundQueue() {
+	for {
+		time.Sleep(500 * time.Millisecond)
+		if c.pausePub {
+			continue
+		}
+
+		for m := c.outMsgBuf.Next(); m != nil; m = c.outMsgBuf.Next() {
+			if _, err := c.WriteMsg(m); err != nil {
+				// todo - log error?
+			}
+		}
+	}
+}
+
 // WriteMsg is the underlying method which marshals AgentMessage types and sends them to the AWS service.
 // This is provided as a convenience so that messages types not already handled can be sent. If the message
 // SequenceNumber field is less than 0, it will be automatically incremented using the internal counter.
@@ -189,7 +211,13 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.synSent = true
-	return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
+
+	err = c.outMsgBuf.Add(msg)
+
+	if !c.pausePub {
+		return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
+	}
+	return int(msg.payloadLength), err
 }
 
 // HandleMsg takes the unprocessed message bytes from the websocket connection (a la Read()), unmarshals the data
@@ -211,8 +239,12 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 
 	//nolint:exhaustive // we'll add more as we find them
 	switch m.MessageType {
-	case Acknowledge, PausePublication, StartPublication:
-		// anything? other than avoiding the default case
+	case Acknowledge:
+		c.outMsgBuf.Remove(m.SequenceNumber)
+	case PausePublication:
+		c.pausePub = true
+	case StartPublication:
+		c.pausePub = false
 	case OutputStreamData:
 		switch m.PayloadType {
 		case Output:
@@ -306,6 +338,11 @@ func (c *SsmDataChannel) DisconnectPort() error {
 	return err
 }
 
+// fixme - according to ssm agent code, send Ack only if sequence number is not a duplicate
+//  if the sequence number is correct, handle message; if it's ahead of the expected sequence number,
+//  send the Ack back to AWS and queue the message to be processed at the right time.
+//  Do not send Ack message if sequence number is lower than expected (duplicate message), maybe return
+//  a specific error (ErrDuplicateMessage?) as a signal to stop further processing?
 // sendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
 // the web socket connection, which is required as part of the SSM session protocol.
 func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {
