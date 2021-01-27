@@ -51,7 +51,7 @@ prove insufficient.
   * Shell sessions to Windows EC2 instances 
   * Test client code on Windows to Linux and Windows instances.
   * Allow multiplexed connections (multiple, simultaneous streams) with port forwarding
-  * Robustness (retries/error recovery, duplicate and out of order message handling)
+  * Robustness (retries/error recovery)
 
 ## References
 The source code for the AWS SSM agent, which is a useful reference for grokking message formats, and the

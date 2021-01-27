@@ -1,6 +1,7 @@
 package datachannel
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -33,18 +34,21 @@ type DataChannel interface {
 // SSM service.  A new(SsmDataChannel) is ready for use, and should immediately call the Open() method.
 type SsmDataChannel struct {
 	seqNum      int64
+	inSeqNum    int64
 	mu          sync.Mutex
 	ws          *websocket.Conn
 	synSent     bool
 	handshakeCh chan bool
 	pausePub    bool
 	outMsgBuf   MessageBuffer
+	inMsgBuf    MessageBuffer
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
 func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
 	c.outMsgBuf = NewMessageBuffer(50)
+	c.inMsgBuf = NewMessageBuffer(50)
 
 	go c.processOutboundQueue()
 
@@ -91,7 +95,6 @@ func (c *SsmDataChannel) Read(data []byte) (int, error) {
 
 	if err != nil {
 		// gorilla code states this is uber-fatal, and we just need to bail out
-		// log.Printf("ReadMessage freakout: %v", err)
 		if websocket.IsCloseError(err, 1000, 1001, 1006) {
 			err = io.EOF
 		}
@@ -145,7 +148,6 @@ func (c *SsmDataChannel) ReadFrom(r io.Reader) (n int64, err error) {
 		nr, err = r.Read(buf)
 		n += int64(nr)
 		if err != nil {
-			// log.Printf("ReadFrom read error: %v", err)
 			if errors.Is(err, io.EOF) {
 				// the contract of ReaderFrom states that io.EOF should not be returned, just
 				// exit the loop and return no error to indicate we are done
@@ -172,21 +174,6 @@ func (c *SsmDataChannel) Write(payload []byte) (int, error) {
 	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
 
 	return c.WriteMsg(msg)
-}
-
-func (c *SsmDataChannel) processOutboundQueue() {
-	for {
-		time.Sleep(500 * time.Millisecond)
-		if c.pausePub {
-			continue
-		}
-
-		for m := c.outMsgBuf.Next(); m != nil; m = c.outMsgBuf.Next() {
-			if _, err := c.WriteMsg(m); err != nil {
-				// todo - log error?
-			}
-		}
-	}
 }
 
 // WriteMsg is the underlying method which marshals AgentMessage types and sends them to the AWS service.
@@ -232,11 +219,6 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if err := c.sendAcknowledgeMessage(m); err != nil {
-		// todo - handle this better (retry?)
-		return nil, err
-	}
-
 	//nolint:exhaustive // we'll add more as we find them
 	switch m.MessageType {
 	case Acknowledge:
@@ -248,7 +230,15 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	case OutputStreamData:
 		switch m.PayloadType {
 		case Output:
-			return m.Payload, nil
+			// duplicate message - discard
+			if m.SequenceNumber < c.inSeqNum {
+				return nil, nil
+			}
+
+			// queue everything else
+			if err := c.inMsgBuf.Add(m); err != nil {
+				return nil, err
+			}
 		case HandshakeRequest:
 			// port forwarding session setup, we'll consider a handshake failure fatal
 			if err := c.processHandshakeRequest(m); err != nil {
@@ -275,7 +265,13 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("UNKNOWN MESSAGE TYPE: %+v", m)
 	}
-	return nil, nil
+
+	if err := c.sendAcknowledgeMessage(m); err != nil {
+		// todo - handle this better (retry?)
+		return nil, err
+	}
+
+	return c.processInboundQueue()
 }
 
 // SetTerminalSize sends a message to the SSM service which indicates the size to use for the remote terminal
@@ -338,11 +334,42 @@ func (c *SsmDataChannel) DisconnectPort() error {
 	return err
 }
 
-// fixme - according to ssm agent code, send Ack only if sequence number is not a duplicate
-//  if the sequence number is correct, handle message; if it's ahead of the expected sequence number,
-//  send the Ack back to AWS and queue the message to be processed at the right time.
-//  Do not send Ack message if sequence number is lower than expected (duplicate message), maybe return
-//  a specific error (ErrDuplicateMessage?) as a signal to stop further processing?
+func (c *SsmDataChannel) processInboundQueue() ([]byte, error) {
+	var err error
+	data := new(bytes.Buffer)
+
+	for {
+		if msg := c.inMsgBuf.Get(c.inSeqNum); msg != nil {
+			atomic.AddInt64(&c.inSeqNum, 1)
+
+			if _, err = data.Write(msg.Payload); err != nil {
+				break
+			}
+
+			c.inMsgBuf.Remove(msg.SequenceNumber)
+		} else {
+			break
+		}
+	}
+
+	return data.Bytes(), err
+}
+
+func (c *SsmDataChannel) processOutboundQueue() {
+	for {
+		time.Sleep(500 * time.Millisecond)
+		if c.pausePub {
+			continue
+		}
+
+		for m := c.outMsgBuf.Next(); m != nil; m = c.outMsgBuf.Next() {
+			if _, err := c.WriteMsg(m); err != nil {
+				// todo - handle error?
+			}
+		}
+	}
+}
+
 // sendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
 // the web socket connection, which is required as part of the SSM session protocol.
 func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {

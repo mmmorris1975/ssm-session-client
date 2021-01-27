@@ -12,6 +12,7 @@ type MessageBuffer interface {
 	Len() int
 	Add(msg *AgentMessage) error
 	Remove(seqNum int64)
+	Get(seqNum int64) *AgentMessage
 	Next() *AgentMessage
 }
 
@@ -51,6 +52,18 @@ func (m *messageBuffer) Remove(seqNum int64) {
 		}
 		delete(m.seqMap, seqNum)
 	}
+}
+
+func (m *messageBuffer) Get(seqNum int64) *AgentMessage {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if v, ok := m.seqMap[seqNum]; ok {
+		if v != nil {
+			return v.Value.(*AgentMessage)
+		}
+	}
+	return nil
 }
 
 func (m *messageBuffer) Next() *AgentMessage {
