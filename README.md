@@ -61,4 +61,4 @@ The `contracts` directory contains definitions of the various types used for mes
 and `datachannel` directories can be a useful reference for how the protocol works.
 
 The node.js library at https://github.com/bertrandmartel/aws-ssm-session was also very instructive for seeing
-and actual client-side implementation of the protocol for shell sessions.
+an actual client-side implementation of the protocol for shell sessions.
