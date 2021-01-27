@@ -207,6 +207,7 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	return int(msg.payloadLength), err
 }
 
+//nolint:gocognit,gocyclo
 // HandleMsg takes the unprocessed message bytes from the websocket connection (a la Read()), unmarshals the data
 // and takes the appropriate action based on the message type.  Messages which have an actionable payload (output
 // payload types, and channel closed payloads) will have that data returned.  Errors will be returned for unknown/
