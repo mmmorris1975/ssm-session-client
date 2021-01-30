@@ -73,6 +73,10 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 	for {
 		select {
 		case <-c.handshakeCh:
+			// make stream unbuffered
+			c.inMsgBuf = nil
+			c.outMsgBuf = nil
+			c.handshakeCh = nil
 			return nil
 		default:
 			n, err := c.Read(buf)
@@ -199,7 +203,9 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	defer c.mu.Unlock()
 	c.synSent = true
 
-	err = c.outMsgBuf.Add(msg)
+	if c.outMsgBuf != nil && msg.MessageType != Acknowledge && msg.PayloadType != HandshakeResponse {
+		err = c.outMsgBuf.Add(msg)
+	}
 
 	if !c.pausePub {
 		return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
@@ -223,7 +229,9 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	//nolint:exhaustive // we'll add more as we find them
 	switch m.MessageType {
 	case Acknowledge:
-		c.outMsgBuf.Remove(m.SequenceNumber)
+		if c.outMsgBuf != nil {
+			c.outMsgBuf.Remove(m.SequenceNumber)
+		}
 	case PausePublication:
 		c.pausePub = true
 	case StartPublication:
@@ -231,6 +239,11 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	case OutputStreamData:
 		switch m.PayloadType {
 		case Output:
+			// unbuffered - return payload directly
+			if c.inMsgBuf == nil {
+				return m.Payload, nil
+			}
+
 			// duplicate message - discard
 			if m.SequenceNumber < c.inSeqNum {
 				return nil, nil
@@ -336,6 +349,10 @@ func (c *SsmDataChannel) DisconnectPort() error {
 }
 
 func (c *SsmDataChannel) processInboundQueue() ([]byte, error) {
+	if c.inMsgBuf == nil {
+		return nil, nil
+	}
+
 	var err error
 	data := new(bytes.Buffer)
 
@@ -361,6 +378,10 @@ func (c *SsmDataChannel) processOutboundQueue() {
 		time.Sleep(500 * time.Millisecond)
 		if c.pausePub {
 			continue
+		}
+
+		if c.outMsgBuf == nil {
+			return
 		}
 
 		for m := c.outMsgBuf.Next(); m != nil; m = c.outMsgBuf.Next() {
