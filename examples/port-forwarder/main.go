@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 // Start a SSM port forwarding session.
@@ -29,27 +30,29 @@ func main() {
 		}
 	}
 
-	t, p, err := net.SplitHostPort(target)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var port int
-	port, err = net.LookupPort("tcp", p) // SSM port forwarding only supports TCP (afaik)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	in := ssmclient.PortForwardingInput{
-		Target:     t,
-		RemotePort: port,
-		LocalPort:  0, // just use random port for demo purposes (this is the default, if not set > 0)
-	}
-
 	s := session.Must(session.NewSessionWithOptions(
 		session.Options{
 			Profile:           profile,
 			SharedConfigState: session.SharedConfigEnable,
 		}))
+
+	parts := strings.Split(target, `:`)
+
+	tgt, err := ssmclient.ResolveTarget(strings.Join(parts[:len(parts)-1], `:`), s)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var port int
+	port, err = net.LookupPort("tcp", parts[len(parts)-1]) // SSM port forwarding only supports TCP (afaik)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	in := ssmclient.PortForwardingInput{
+		Target:     tgt,
+		RemotePort: port,
+		LocalPort:  0, // just use random port for demo purposes (this is the default, if not set > 0)
+	}
 	log.Fatal(ssmclient.PortForwardingSession(s, &in))
 }

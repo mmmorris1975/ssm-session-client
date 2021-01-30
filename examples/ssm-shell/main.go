@@ -33,5 +33,11 @@ func main() {
 			Profile:           profile,
 			SharedConfigState: session.SharedConfigEnable,
 		}))
-	log.Fatal(ssmclient.ShellSession(s, target))
+
+	tgt, err := ssmclient.ResolveTarget(target, s)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Fatal(ssmclient.ShellSession(s, tgt))
 }
