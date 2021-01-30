@@ -241,6 +241,7 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 		case Output:
 			// unbuffered - return payload directly
 			if c.inMsgBuf == nil {
+				_ = c.sendAcknowledgeMessage(m) // todo - handle error?
 				return m.Payload, nil
 			}
 
