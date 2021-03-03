@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/aws/aws-sdk-go/aws/session"
+	"context"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/mmmorris1975/ssm-session-client/ssmclient"
 	"log"
 	"net"
@@ -30,15 +31,14 @@ func main() {
 		}
 	}
 
-	s := session.Must(session.NewSessionWithOptions(
-		session.Options{
-			Profile:           profile,
-			SharedConfigState: session.SharedConfigEnable,
-		}))
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	parts := strings.Split(target, `:`)
 
-	tgt, err := ssmclient.ResolveTarget(strings.Join(parts[:len(parts)-1], `:`), s)
+	tgt, err := ssmclient.ResolveTarget(strings.Join(parts[:len(parts)-1], `:`), cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,5 +54,5 @@ func main() {
 		RemotePort: port,
 		LocalPort:  0, // just use random port for demo purposes (this is the default, if not set > 0)
 	}
-	log.Fatal(ssmclient.PortForwardingSession(s, &in))
+	log.Fatal(ssmclient.PortForwardingSession(cfg, &in))
 }

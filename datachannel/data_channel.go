@@ -2,12 +2,13 @@ package datachannel
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"io"
@@ -19,7 +20,7 @@ import (
 
 // DataChannel is the interface definition for handling communication with the AWS SSM messaging service.
 type DataChannel interface {
-	Open(client.ConfigProvider, *ssm.StartSessionInput) error
+	Open(aws.Config, *ssm.StartSessionInput) error
 	HandleMsg(data []byte) ([]byte, error)
 	SetTerminalSize(rows, cols uint32) error
 	TerminateSession() error
@@ -45,7 +46,7 @@ type SsmDataChannel struct {
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
-func (c *SsmDataChannel) Open(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
+func (c *SsmDataChannel) Open(cfg aws.Config, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
 	c.outMsgBuf = NewMessageBuffer(50)
 	c.inMsgBuf = NewMessageBuffer(50)
@@ -444,8 +445,8 @@ func (c *SsmDataChannel) processHandshakeRequest(msg *AgentMessage) error {
 	return err
 }
 
-func (c *SsmDataChannel) startSession(cfg client.ConfigProvider, in *ssm.StartSessionInput) error {
-	out, err := ssm.New(cfg).StartSession(in)
+func (c *SsmDataChannel) startSession(cfg aws.Config, in *ssm.StartSessionInput) error {
+	out, err := ssm.NewFromConfig(cfg).StartSession(context.Background(), in)
 	if err != nil {
 		return err
 	}

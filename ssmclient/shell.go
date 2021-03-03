@@ -2,8 +2,8 @@ package ssmclient
 
 import (
 	"errors"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"io"
 	"log"
@@ -13,9 +13,9 @@ import (
 // ShellSession starts a shell session with the instance specified in the target parameter.  The
 // client.ConfigProvider parameter will be used to call the AWS SSM StartSession API, which is used
 // as part of establishing the websocket communication channel.
-func ShellSession(cfg client.ConfigProvider, target string) error {
+func ShellSession(cfg aws.Config, target string) error {
 	c := new(datachannel.SsmDataChannel)
-	if err := c.Open(cfg, new(ssm.StartSessionInput).SetTarget(target)); err != nil {
+	if err := c.Open(cfg, &ssm.StartSessionInput{Target: aws.String(target)}); err != nil {
 		return err
 	}
 	defer c.Close()

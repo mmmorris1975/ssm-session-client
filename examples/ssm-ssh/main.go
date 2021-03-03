@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/aws/aws-sdk-go/aws/session"
+	"context"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/mmmorris1975/ssm-session-client/ssmclient"
 	"log"
 	"net"
@@ -46,10 +47,9 @@ func main() {
 		RemotePort: port,
 	}
 
-	s := session.Must(session.NewSessionWithOptions(
-		session.Options{
-			Profile:           profile,
-			SharedConfigState: session.SharedConfigEnable,
-		}))
-	log.Fatal(ssmclient.SSHSession(s, &in))
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(ssmclient.SSHSession(cfg, &in))
 }

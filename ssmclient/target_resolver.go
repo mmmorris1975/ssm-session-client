@@ -1,11 +1,12 @@
 package ssmclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"log"
 	"net"
 	"regexp"
@@ -37,11 +38,10 @@ type TargetResolver interface {
 // The first check will see if the target is already in the format of an EC2 instance ID.  Next, if
 // the cfg parameter is not nil, checking by EC2 instance tags or private IPv4 IP address is performed.
 // Finally, resolving by DNS TXT record will be attempted.
-func ResolveTarget(target string, cfg client.ConfigProvider) (string, error) {
-	resolvers := make([]TargetResolver, 0)
-
-	if cfg != nil {
-		resolvers = append(resolvers, NewTagResolver(cfg), NewIPResolver(cfg))
+func ResolveTarget(target string, cfg aws.Config) (string, error) {
+	resolvers := []TargetResolver{
+		NewTagResolver(cfg),
+		NewIPResolver(cfg),
 	}
 
 	return ResolveTargetChain(strings.TrimSpace(target), append(resolvers, NewDNSResolver())...)
@@ -73,12 +73,12 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string
 }
 
 // NewTagResolver is a TargetResolver which knows how to find an EC2 instance using tags.
-func NewTagResolver(cfg client.ConfigProvider) *tagResolver {
+func NewTagResolver(cfg aws.Config) *tagResolver {
 	return &tagResolver{&ec2Resolver{cfg: cfg}}
 }
 
 // NewIPResolver is a TargetResolver which knows how to find an EC2 instance using the private IPv4 address.
-func NewIPResolver(cfg client.ConfigProvider) *ipResolver {
+func NewIPResolver(cfg aws.Config) *ipResolver {
 	return &ipResolver{&ec2Resolver{cfg: cfg}}
 }
 
@@ -127,7 +127,10 @@ func (r *tagResolver) Resolve(target string) (string, error) {
 		return "", ErrInvalidTargetFormat
 	}
 
-	f := new(ec2.Filter).SetName(fmt.Sprintf(`tag:%s`, spec[0])).SetValues(aws.StringSlice([]string{spec[1]}))
+	f := types.Filter{
+		Name:   aws.String(fmt.Sprintf(`tag:%s`, spec[0])),
+		Values: []string{spec[1]},
+	}
 	return r.ec2Resolver.Resolve(f)
 }
 
@@ -179,9 +182,13 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	// private IP space in an account and our DescribeInstances call will match any instance with that address,
 	// regardless of which VPC is resides in.  In cases where there is overlapping IP space, caller should use a more
 	// specific method for finding the instance, like tags.
-	f := new(ec2.Filter).SetName(`private-ip-address`).SetValues(aws.StringSlice(privIP))
+	f := types.Filter{
+		Name:   aws.String(`private-ip-address`),
+		Values: privIP,
+	}
 	if len(pubIP) > 0 {
-		f.SetName(`ip-address`).SetValues(aws.StringSlice(pubIP))
+		f.Name = aws.String(`ip-address`)
+		f.Values = pubIP
 	}
 
 	return r.ec2Resolver.Resolve(f)
@@ -201,12 +208,12 @@ func isPrivateAddr(addr net.IP) bool {
  *  instance ID. If more than 1 instance matches the filter, the 1st instance ID in the list is returned.
  */
 type ec2Resolver struct {
-	cfg client.ConfigProvider
+	cfg aws.Config
 }
 
-func (r *ec2Resolver) Resolve(filter ...*ec2.Filter) (string, error) {
-	filter = append(filter, new(ec2.Filter).SetName("instance-state-name").SetValues([]*string{aws.String("running")}))
-	o, err := ec2.New(r.cfg).DescribeInstances(new(ec2.DescribeInstancesInput).SetFilters(filter))
+func (r *ec2Resolver) Resolve(filter ...types.Filter) (string, error) {
+	filter = append(filter, types.Filter{Name: aws.String("instance-state-name"), Values: []string{"running"}})
+	o, err := ec2.NewFromConfig(r.cfg).DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{Filters: filter})
 	if err != nil {
 		return "", err
 	}

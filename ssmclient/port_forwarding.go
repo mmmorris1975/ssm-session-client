@@ -1,9 +1,8 @@
 package ssmclient
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"golang.org/x/net/netutil"
 	"io"
@@ -29,7 +28,7 @@ type PortForwardingInput struct {
 // configure the session.  The client.ConfigProvider parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
 //nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
-func PortForwardingSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
+func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	c, err := openDataChannel(cfg, opts)
 	if err != nil {
 		return nil
@@ -117,13 +116,13 @@ outer:
 	return nil
 }
 
-func openDataChannel(cfg client.ConfigProvider, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
+func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
 	in := &ssm.StartSessionInput{
 		DocumentName: aws.String("AWS-StartPortForwardingSession"),
 		Target:       aws.String(opts.Target),
-		Parameters: map[string][]*string{
-			"localPortNumber": {aws.String(strconv.Itoa(opts.LocalPort))},
-			"portNumber":      {aws.String(strconv.Itoa(opts.RemotePort))},
+		Parameters: map[string][]string{
+			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
+			"portNumber":      {strconv.Itoa(opts.RemotePort)},
 		},
 	}
 

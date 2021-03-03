@@ -2,9 +2,8 @@ package ssmclient
 
 import (
 	"errors"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"io"
 	"log"
@@ -17,7 +16,7 @@ import (
 // use a PortForwardingInput type to configure the session properties.  Any LocalPort information is ignored, and
 // if no RemotePort is specified, the default SSH port (22) will be used. The client.ConfigProvider parameter is
 // used to call the AWS SSM StartSession API, which is used as part of establishing the websocket communication channel.
-func SSHSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
+func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 	var port = "22"
 	if opts.RemotePort > 0 {
 		port = strconv.Itoa(opts.RemotePort)
@@ -26,8 +25,8 @@ func SSHSession(cfg client.ConfigProvider, opts *PortForwardingInput) error {
 	in := &ssm.StartSessionInput{
 		DocumentName: aws.String("AWS-StartSSHSession"),
 		Target:       aws.String(opts.Target),
-		Parameters: map[string][]*string{
-			"portNumber": {aws.String(port)},
+		Parameters: map[string][]string{
+			"portNumber": {port},
 		},
 	}
 
