@@ -7,15 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 // DataChannel is the interface definition for handling communication with the AWS SSM messaging service.
@@ -43,6 +44,8 @@ type SsmDataChannel struct {
 	pausePub    bool
 	outMsgBuf   MessageBuffer
 	inMsgBuf    MessageBuffer
+	lastRows    uint32
+	lastCols    uint32
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
@@ -293,6 +296,11 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 // SetTerminalSize sends a message to the SSM service which indicates the size to use for the remote terminal
 // when using a shell session client.
 func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
+	if c.lastRows == rows && c.lastCols == cols {
+		// skip if terminal size is unchanged
+		return nil
+	}
+
 	input := map[string]uint32{
 		"rows": rows,
 		"cols": cols,
@@ -309,6 +317,10 @@ func (c *SsmDataChannel) SetTerminalSize(rows, cols uint32) error {
 	msg.SequenceNumber = atomic.AddInt64(&c.seqNum, 1)
 	msg.PayloadType = Size
 	msg.Payload = payload
+
+	// Remind our future selves what the last-set values were:
+	c.lastRows = rows
+	c.lastCols = cols
 
 	_, err = c.WriteMsg(msg)
 	return err
