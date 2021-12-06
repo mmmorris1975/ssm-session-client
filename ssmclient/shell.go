@@ -2,12 +2,13 @@ package ssmclient
 
 import (
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"io"
 	"log"
 	"os"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
 // ShellSession starts a shell session with the instance specified in the target parameter.  The
@@ -46,16 +47,10 @@ func ShellSession(cfg aws.Config, target string) error {
 func updateTermSize(c datachannel.DataChannel) error {
 	rows, cols, err := getWinSize()
 	if err != nil {
-		log.Printf("getWinSize() failed: %v", err)
-	}
-
-	// make sure we set some default terminal size with contrived values
-	if rows < 1 {
-		rows = 45
-	}
-
-	if cols < 1 {
+		// make sure we set some default terminal size with contrived values
 		cols = 132
+		rows = 45
+		log.Printf("Could not get size of the terminal: %s, using width %d height %d\n", err, cols, rows)
 	}
 
 	return c.SetTerminalSize(rows, cols)
