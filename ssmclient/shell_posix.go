@@ -3,11 +3,17 @@
 package ssmclient
 
 import (
-	"github.com/mmmorris1975/ssm-session-client/datachannel"
-	"golang.org/x/sys/unix"
 	"log"
 	"os"
 	"os/signal"
+	"time"
+
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
+	"golang.org/x/sys/unix"
+)
+
+const (
+	ResizeSleepInterval = time.Millisecond * 500
 )
 
 var origTermios *unix.Termios
@@ -15,6 +21,10 @@ var origTermios *unix.Termios
 func initialize(c datachannel.DataChannel) error {
 	// configure signal handlers and immediately trigger a size update
 	installSignalHandlers(c) <- unix.SIGWINCH
+
+	// set handle re-size timer
+	handleTerminalResize(c)
+
 	return configureStdin()
 }
 
@@ -51,4 +61,16 @@ func getWinSize() (rows, cols uint32, err error) {
 	}
 
 	return uint32(sz.Row), uint32(sz.Col), nil
+}
+
+// This approach is inspired by AWS's own client:
+// https://github.com/aws/session-manager-plugin/blob/65933d1adf368d1efde7380380a19a7a691340c1/src/sessionmanagerplugin/session/shellsession/shellsession.go#L98-L104
+func handleTerminalResize(c datachannel.DataChannel) {
+	go func() {
+		for {
+			_ = updateTermSize(c)
+			// repeating this loop for every 500ms
+			time.Sleep(ResizeSleepInterval)
+		}
+	}()
 }
