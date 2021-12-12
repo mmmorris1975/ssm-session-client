@@ -39,5 +39,6 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// A 3rd argument can be passed to specify a command to run before turning the shell over to the user
 	log.Fatal(ssmclient.ShellSession(cfg, tgt))
 }
