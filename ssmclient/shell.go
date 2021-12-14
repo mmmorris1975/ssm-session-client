@@ -13,7 +13,8 @@ import (
 
 // ShellSession starts a shell session with the instance specified in the target parameter.  The
 // client.ConfigProvider parameter will be used to call the AWS SSM StartSession API, which is used
-// as part of establishing the websocket communication channel.
+// as part of establishing the websocket communication channel.  A vararg slice of io.Readers can
+// be provided to send data to the instance before handing control of the terminal to the user.
 func ShellSession(cfg aws.Config, target string, initCmd ...io.Reader) error {
 	c := new(datachannel.SsmDataChannel)
 	if err := c.Open(cfg, &ssm.StartSessionInput{Target: aws.String(target)}); err != nil {
@@ -34,8 +35,8 @@ func ShellSession(cfg aws.Config, target string, initCmd ...io.Reader) error {
 		}
 	}()
 
-	if len(initCmd) > 0 {
-		_, _ = io.Copy(c, initCmd[0])
+	for _, cmd := range initCmd {
+		_, _ = io.Copy(c, cmd)
 	}
 
 	if _, err := io.Copy(os.Stdout, c); err != nil {
