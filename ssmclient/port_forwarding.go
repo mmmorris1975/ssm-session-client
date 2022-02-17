@@ -31,7 +31,7 @@ type PortForwardingInput struct {
 func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	c, err := openDataChannel(cfg, opts)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer func() {
 		// Both the basic and muxing plugins support TerminateSession on the agent side.
