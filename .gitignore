@@ -27,3 +27,4 @@ vendor/
 examples/port-forwarder/port-forwarder
 examples/ssm-shell/ssm-shell
 examples/ssm-ssh/ssm-ssh
+examples/ec2instance-connect/ec2instance-connect

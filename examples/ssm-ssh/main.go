@@ -31,6 +31,11 @@ func main() {
 		}
 	}
 
+	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var port int
 	t, p, err := net.SplitHostPort(target)
 	if err == nil {
@@ -42,14 +47,15 @@ func main() {
 		t = target
 	}
 
-	in := ssmclient.PortForwardingInput{
-		Target:     t,
-		RemotePort: port,
-	}
-
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	tgt, err := ssmclient.ResolveTarget(t, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	in := ssmclient.PortForwardingInput{
+		Target:     tgt,
+		RemotePort: port,
+	}
+
 	log.Fatal(ssmclient.SSHSession(cfg, &in))
 }

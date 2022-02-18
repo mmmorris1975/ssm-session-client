@@ -23,7 +23,7 @@ func main() {
 	if v, ok := os.LookupEnv("AWS_PROFILE"); ok {
 		profile = v
 	} else {
-		if len(os.Args) > 1 {
+		if len(os.Args) > 2 {
 			profile = os.Args[1]
 			target = os.Args[2]
 		}
