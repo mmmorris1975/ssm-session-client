@@ -14,15 +14,15 @@ If unset, it will consult the AWS_PROFILE environment variable, and if that is u
 set via environment variables, or from the default profile.
 
 The user parameter should be set as the user used to connect to the remote host.  This is required by the
-AWS API and the ssh command doesn't seem to pass that info to the ProxyCommand via a side channel.
+AWS API in order to provision the SSH public key for the connection..
 
 The target_spec parameter is required, and is in the form of ec2_instance_id:port_number (ex: i-deadbeef:80)
 ```
 
-Example ssh_config (ProxyCommand doesn't honor the %u replacement for the username):
+Example ssh_config:
 ```
 Host i-*
   IdentityFile ~/.ssh/path_to_your_private_key
-  ProxyCommand ec2instance-connect ec2-user@%h:%p
+  ProxyCommand ec2instance-connect %r@%h:%p
   User ec2-user
 ```
