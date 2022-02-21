@@ -156,7 +156,7 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 	if ip == nil {
 		// didn't look like an IP address, attempt DNS resolution ... maybe we'll find something there
 		addrs, err := net.LookupIP(trimmed)
-		if err == nil {
+		if err != nil {
 			return "", ErrInvalidTargetFormat
 		}
 		targets = addrs
