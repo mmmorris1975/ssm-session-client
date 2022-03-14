@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"log"
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
 var (
@@ -73,18 +74,18 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string
 }
 
 // NewTagResolver is a TargetResolver which knows how to find an EC2 instance using tags.
-func NewTagResolver(cfg aws.Config) *tagResolver {
-	return &tagResolver{&ec2Resolver{cfg: cfg}}
+func NewTagResolver(cfg aws.Config) *TagResolver {
+	return &TagResolver{&EC2Resolver{cfg: cfg}}
 }
 
 // NewIPResolver is a TargetResolver which knows how to find an EC2 instance using the private IPv4 address.
-func NewIPResolver(cfg aws.Config) *ipResolver {
-	return &ipResolver{&ec2Resolver{cfg: cfg}}
+func NewIPResolver(cfg aws.Config) *IPResolver {
+	return &IPResolver{&EC2Resolver{cfg: cfg}}
 }
 
 // NewDNSResolver is a TargetResolver which knows how to find an EC2 instance using DNS TXT record lookups.
-func NewDNSResolver() *dnsResolver {
-	return new(dnsResolver)
+func NewDNSResolver() *DNSResolver {
+	return new(DNSResolver)
 }
 
 /*
@@ -92,9 +93,9 @@ func NewDNSResolver() *dnsResolver {
  * to resolve to the EC2 instance ID associated with the DNS name.  If the DNS record is not found, or if
  * there is nothing which looks like an EC2 instance ID in the record data, and error is returned.
  */
-type dnsResolver bool
+type DNSResolver bool
 
-func (r *dnsResolver) Resolve(target string) (string, error) {
+func (r *DNSResolver) Resolve(target string) (string, error) {
 	rr, err := net.LookupTXT(strings.TrimSpace(target))
 	if err != nil {
 		return "", err
@@ -117,11 +118,11 @@ func (r *dnsResolver) Resolve(target string) (string, error) {
  *  is found, only the 1st element of the instances list is returned.  The nature of the AWS EC2 API will not
  *  guarantee ordering of the instances list.
  */
-type tagResolver struct {
-	*ec2Resolver
+type TagResolver struct {
+	*EC2Resolver
 }
 
-func (r *tagResolver) Resolve(target string) (string, error) {
+func (r *TagResolver) Resolve(target string) (string, error) {
 	spec := strings.SplitN(strings.TrimSpace(target), `:`, 2)
 	if len(spec) < 2 {
 		return "", ErrInvalidTargetFormat
@@ -131,7 +132,7 @@ func (r *tagResolver) Resolve(target string) (string, error) {
 		Name:   aws.String(fmt.Sprintf(`tag:%s`, spec[0])),
 		Values: []string{spec[1]},
 	}
-	return r.ec2Resolver.Resolve(f)
+	return r.EC2Resolver.Resolve(f)
 }
 
 /*
@@ -141,11 +142,11 @@ func (r *tagResolver) Resolve(target string) (string, error) {
  *  1 instance ID is returned; if more than 1 match is found, only the 1st element of the instances list
  *  is returned.  The nature of the AWS EC2 API will not guarantee ordering of the instances list.
  */
-type ipResolver struct {
-	*ec2Resolver
+type IPResolver struct {
+	*EC2Resolver
 }
 
-func (r *ipResolver) Resolve(target string) (string, error) {
+func (r *IPResolver) Resolve(target string) (string, error) {
 	var pubIP, privIP []string
 	var targets []net.IP
 
@@ -191,7 +192,7 @@ func (r *ipResolver) Resolve(target string) (string, error) {
 		f.Values = pubIP
 	}
 
-	return r.ec2Resolver.Resolve(f)
+	return r.EC2Resolver.Resolve(f)
 }
 
 func isPrivateAddr(addr net.IP) bool {
@@ -207,11 +208,11 @@ func isPrivateAddr(addr net.IP) bool {
  *  EC2 Resolver calls the EC2 DescribeInstances API with a provided filter, which will return at most 1
  *  instance ID. If more than 1 instance matches the filter, the 1st instance ID in the list is returned.
  */
-type ec2Resolver struct {
+type EC2Resolver struct {
 	cfg aws.Config
 }
 
-func (r *ec2Resolver) Resolve(filter ...types.Filter) (string, error) {
+func (r *EC2Resolver) Resolve(filter ...types.Filter) (string, error) {
 	filter = append(filter, types.Filter{Name: aws.String("instance-state-name"), Values: []string{"running"}})
 	o, err := ec2.NewFromConfig(r.cfg).DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{Filters: filter})
 	if err != nil {
