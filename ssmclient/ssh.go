@@ -50,14 +50,18 @@ func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 	errCh := make(chan error, 5)
 	go func() {
 		if _, err := io.Copy(c, os.Stdin); err != nil {
+			log.Printf("error copying from stdin to websocket: %v", err)
 			errCh <- err
 		}
+		log.Print("copy from stdin to websocket finished")
 	}()
 
 	if _, err := io.Copy(os.Stdout, c); err != nil {
 		if !errors.Is(err, io.EOF) {
+			log.Printf("error copying from websocket to stdout: %v", err)
 			errCh <- err
 		}
+		log.Print("EOF received from websocket -> stdout copy")
 		close(errCh)
 	}
 
