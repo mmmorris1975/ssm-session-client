@@ -465,13 +465,17 @@ func (c *SsmDataChannel) startSession(cfg aws.Config, in *ssm.StartSessionInput)
 	if err != nil {
 		return err
 	}
+	return c.StartSessionFromDataChannelURL(*out.StreamUrl, *out.TokenValue)
+}
 
-	c.ws, _, err = websocket.DefaultDialer.Dial(*out.StreamUrl, http.Header{}) //nolint:bodyclose
+func (c *SsmDataChannel) StartSessionFromDataChannelURL(url string, token string) error {
+	ws, _, err := websocket.DefaultDialer.Dial(url, http.Header{}) //nolint:bodyclose
 	if err != nil {
 		return err
 	}
+	c.ws = ws
 
-	if err = c.openDataChannel(*out.TokenValue); err != nil {
+	if err = c.openDataChannel(token); err != nil {
 		_ = c.Close()
 		return err
 	}
