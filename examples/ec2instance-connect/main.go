@@ -78,5 +78,6 @@ func main() {
 		RemotePort: port,
 	}
 
+	// Alternatively, can be called as ssmclient.SSHPluginSession(cfg, tgt) to use the AWS-managed SSM session client code
 	log.Fatal(ssmclient.SSHSession(cfg, &in))
 }

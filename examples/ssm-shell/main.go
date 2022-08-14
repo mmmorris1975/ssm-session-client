@@ -40,5 +40,6 @@ func main() {
 	}
 
 	// A 3rd argument can be passed to specify a command to run before turning the shell over to the user
+	// Alternatively, can be called as ssmclient.ShellPluginSession(cfg, tgt) to use the AWS-managed SSM session client code
 	log.Fatal(ssmclient.ShellSession(cfg, tgt))
 }

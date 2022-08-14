@@ -25,7 +25,7 @@ type PortForwardingInput struct {
 }
 
 // PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
-// configure the session.  The client.ConfigProvider parameter will be used to call the AWS SSM StartSession
+// configure the session.  The aws.Config parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
 //nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
 func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
@@ -114,6 +114,21 @@ outer:
 		_ = conn.Close()
 	}
 	return nil
+}
+
+// PortPluginSession delegates the execution of the SSM port forwarding to the AWS-managed session manager plugin code,
+// bypassing this libraries internal websocket code and connection management.
+func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
+	in := &ssm.StartSessionInput{
+		DocumentName: aws.String("AWS-StartPortForwardingSession"),
+		Target:       aws.String(opts.Target),
+		Parameters: map[string][]string{
+			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
+			"portNumber":      {strconv.Itoa(opts.RemotePort)},
+		},
+	}
+
+	return PluginSession(cfg, in)
 }
 
 func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {

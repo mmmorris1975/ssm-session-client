@@ -54,5 +54,7 @@ func main() {
 		RemotePort: port,
 		LocalPort:  0, // just use random port for demo purposes (this is the default, if not set > 0)
 	}
+
+	// Alternatively, can be called as ssmclient.PortluginSession(cfg, tgt) to use the AWS-managed SSM session client code
 	log.Fatal(ssmclient.PortForwardingSession(cfg, &in))
 }

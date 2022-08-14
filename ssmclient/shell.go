@@ -11,10 +11,10 @@ import (
 	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
-// ShellSession starts a shell session with the instance specified in the target parameter.  The
-// client.ConfigProvider parameter will be used to call the AWS SSM StartSession API, which is used
-// as part of establishing the websocket communication channel.  A vararg slice of io.Readers can
-// be provided to send data to the instance before handing control of the terminal to the user.
+// ShellSession starts a shell session with the instance specified in the target parameter.  The aws.Config
+// parameter will be used to call the AWS SSM StartSession API, which is used as part of establishing the
+// websocket communication channel.  A vararg slice of io.Readers can be provided to send data to the
+// instance before handing control of the terminal to the user.
 func ShellSession(cfg aws.Config, target string, initCmd ...io.Reader) error {
 	c := new(datachannel.SsmDataChannel)
 	if err := c.Open(cfg, &ssm.StartSessionInput{Target: aws.String(target)}); err != nil {
@@ -59,4 +59,10 @@ func updateTermSize(c datachannel.DataChannel) error {
 	}
 
 	return c.SetTerminalSize(rows, cols)
+}
+
+// ShellPluginSession delegates the execution of the SSM shell session to the AWS-managed session manager plugin code,
+// bypassing this libraries internal websocket code and session management.
+func ShellPluginSession(cfg aws.Config, target string) error {
+	return PluginSession(cfg, &ssm.StartSessionInput{Target: aws.String(target)})
 }
