@@ -25,7 +25,7 @@ type PortForwardingInput struct {
 }
 
 // PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
-// configure the session.  The client.ConfigProvider parameter will be used to call the AWS SSM StartSession
+// configure the session.  The aws.Config parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
 //nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
 func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {

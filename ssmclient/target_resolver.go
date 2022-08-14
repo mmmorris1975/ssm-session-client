@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	// ErrInvalidTargetFormat is the error returned if the target format doesn't match the expected format
-	// required by the resolver.
+	// ErrInvalidTargetFormat is the error returned if the target format doesn't match the expected format required by the resolver.
 	ErrInvalidTargetFormat = errors.New("invalid target format")
 	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance.
 	ErrNoInstanceFound = errors.New("no instances returned from lookup")
