@@ -116,6 +116,21 @@ outer:
 	return nil
 }
 
+// PortPluginSession delegates the execution of the SSM port forwarding to the AWS-managed session manager plugin code,
+// bypassing this libraries internal websocket code and connection management.
+func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
+	in := &ssm.StartSessionInput{
+		DocumentName: aws.String("AWS-StartPortForwardingSession"),
+		Target:       aws.String(opts.Target),
+		Parameters: map[string][]string{
+			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
+			"portNumber":      {strconv.Itoa(opts.RemotePort)},
+		},
+	}
+
+	return PluginSession(cfg, in)
+}
+
 func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
 	in := &ssm.StartSessionInput{
 		DocumentName: aws.String("AWS-StartPortForwardingSession"),

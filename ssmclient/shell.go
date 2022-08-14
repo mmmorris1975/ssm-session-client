@@ -60,3 +60,9 @@ func updateTermSize(c datachannel.DataChannel) error {
 
 	return c.SetTerminalSize(rows, cols)
 }
+
+// ShellPluginSession delegates the execution of the SSM shell session to the AWS-managed session manager plugin code,
+// bypassing this libraries internal websocket code and session management.
+func ShellPluginSession(cfg aws.Config, target string) error {
+	return PluginSession(cfg, &ssm.StartSessionInput{Target: aws.String(target)})
+}
