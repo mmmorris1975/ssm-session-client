@@ -3,11 +3,11 @@ package ssmclient
 import (
 	"context"
 
-	"github.com/aws/SSMCLI/src/datachannel"
-	"github.com/aws/SSMCLI/src/log"
-	"github.com/aws/SSMCLI/src/sessionmanagerplugin/session"
-	_ "github.com/aws/SSMCLI/src/sessionmanagerplugin/session/portsession"
-	_ "github.com/aws/SSMCLI/src/sessionmanagerplugin/session/shellsession"
+	"github.com/aws/session-manager-plugin/src/datachannel"
+	"github.com/aws/session-manager-plugin/src/log"
+	"github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
+	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
+	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/google/uuid"

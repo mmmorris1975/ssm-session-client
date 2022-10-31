@@ -3,13 +3,13 @@ module github.com/mmmorris1975/ssm-session-client
 go 1.15
 
 require (
-	github.com/aws/SSMCLI v0.0.0-20220617200849-916aa5c1c241
 	github.com/aws/aws-sdk-go v1.44.76 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.16.11
-	github.com/aws/aws-sdk-go-v2/config v1.16.1
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.52.1
-	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.14.4
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.27.9
+	github.com/aws/aws-sdk-go-v2 v1.17.1
+	github.com/aws/aws-sdk-go-v2/config v1.17.10
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.64.0
+	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.14.11
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.31.3
+	github.com/aws/session-manager-plugin v0.0.0-20221012155945-c523002ee02c
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
@@ -25,4 +25,4 @@ require (
 )
 
 // REF: https://github.com/aws/session-manager-plugin/issues/1
-replace github.com/aws/SSMCLI => github.com/aws/session-manager-plugin v0.0.0-20220617200849-916aa5c1c241
+// replace github.com/aws/SSMCLI => github.com/aws/session-manager-plugin v0.0.0-20221012155945-c523002ee02c
