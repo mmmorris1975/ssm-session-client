@@ -15,6 +15,8 @@ an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Ses
 target to connect with.  For now, this client has only been tested on macOS and Linux, connecting to a Linux target.
 See the [example](examples/ssm-shell) for a simple implementation.
 
+Note: If you have enabled KMS encryption for Sessions, then use `ssmclient.ShellPluginSession()`.
+
 ## SSH
 SSH over SSM integration can be leveraged via the `ssmclient.SshSession()` function.  Since the SSM SSH integration is
 a specialized form of port forwarding, the function takes the same arguments as `ssmclient.PortForwardingSession()`.
