@@ -47,6 +47,7 @@ type SsmDataChannel struct {
 	inMsgBuf    MessageBuffer
 	lastRows    uint32
 	lastCols    uint32
+	remaining   []byte
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
@@ -96,24 +97,21 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 	}
 }
 
-// Read will get a single message from the websocket connection. The unprocessed message is copied to the
-// requested []byte (which should be sized to handle at least 1536 bytes).
+// Read will copy at most one message from the websocket connection.
 func (c *SsmDataChannel) Read(data []byte) (int, error) {
-	_, msg, err := c.ws.ReadMessage()
-	n := copy(data[:len(msg)], msg)
-
-	if err != nil {
-		// gorilla code states this is uber-fatal, and we just need to bail out
-		if websocket.IsCloseError(err, 1000, 1001, 1006) {
-			err = io.EOF
+	if len(c.remaining) == 0 {
+		_, msg, err := c.ws.ReadMessage()
+		if err != nil {
+			// gorilla code states this is uber-fatal, and we just need to bail out
+			if websocket.IsCloseError(err, 1000, 1001, 1006) {
+				err = io.EOF
+			}
+			return 0, err
 		}
-		return n, err
+		c.remaining = msg
 	}
-
-	if n < agentMsgHeaderLen {
-		return n, errors.New("invalid message received, too short")
-	}
-
+	n := copy(data, c.remaining)
+	c.remaining = c.remaining[n:]
 	return n, nil
 }
 
