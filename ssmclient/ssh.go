@@ -62,8 +62,8 @@ func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 			errCh <- err
 		}
 		log.Print("EOF received from websocket -> stdout copy")
-		close(errCh)
 	}
+	close(errCh)
 
 	return <-errCh
 }
