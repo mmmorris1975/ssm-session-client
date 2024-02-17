@@ -43,8 +43,8 @@ func ShellSession(cfg aws.Config, target string, initCmd ...io.Reader) error {
 		if !errors.Is(err, io.EOF) {
 			errCh <- err
 		}
-		close(errCh)
 	}
+	close(errCh)
 
 	return <-errCh
 }
