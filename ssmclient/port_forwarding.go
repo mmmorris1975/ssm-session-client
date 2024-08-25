@@ -1,10 +1,6 @@
 package ssmclient
 
 import (
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/mmmorris1975/ssm-session-client/datachannel"
-	"golang.org/x/net/netutil"
 	"io"
 	"log"
 	"net"
@@ -12,6 +8,11 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
+	"golang.org/x/net/netutil"
 )
 
 // PortForwardingInput configures the port forwarding session parameters.
@@ -22,11 +23,13 @@ type PortForwardingInput struct {
 	Target     string
 	RemotePort int
 	LocalPort  int
+	Host       string // optional
 }
 
 // PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
 // configure the session.  The aws.Config parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
+//
 //nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
 func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	c, err := openDataChannel(cfg, opts)
@@ -119,13 +122,21 @@ outer:
 // PortPluginSession delegates the execution of the SSM port forwarding to the AWS-managed session manager plugin code,
 // bypassing this libraries internal websocket code and connection management.
 func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
+	documentName := "AWS-StartPortForwardingSession"
+	parameters := map[string][]string{
+		"localPortNumber": {strconv.Itoa(opts.LocalPort)},
+		"portNumber":      {strconv.Itoa(opts.RemotePort)},
+	}
+
+	if opts.Host != "" {
+		parameters["host"] = []string{opts.Host}
+		documentName = "AWS-StartPortForwardingSessionToRemoteHost"
+	}
+
 	in := &ssm.StartSessionInput{
-		DocumentName: aws.String("AWS-StartPortForwardingSession"),
+		DocumentName: aws.String(documentName),
 		Target:       aws.String(opts.Target),
-		Parameters: map[string][]string{
-			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
-			"portNumber":      {strconv.Itoa(opts.RemotePort)},
-		},
+		Parameters:   parameters,
 	}
 
 	return PluginSession(cfg, in)
