@@ -53,7 +53,7 @@ func ResolveTarget(target string, cfg aws.Config) (string, error) {
 // resolver in the chain is checked.  If all resolvers fail to find an instance ID an error is returned.
 func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string, err error) {
 	var matched bool
-	matched, err = regexp.MatchString(`^i-[[:xdigit:]]{8,}$`, target)
+	matched, err = regexp.MatchString(`^m?i-[[:xdigit:]]{8,}$`, target)
 	if err != nil {
 		return "", err
 	}
