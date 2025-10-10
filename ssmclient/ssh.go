@@ -1,14 +1,16 @@
 package ssmclient
 
 import (
+	"context"
 	"errors"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"io"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
 // SSHSession starts a specialized port forwarding session to allow SSH connectivity to the target instance over
@@ -42,7 +44,7 @@ func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 	installSignalHandler(c)
 
 	log.Print("waiting for handshake")
-	if err := c.WaitForHandshakeComplete(); err != nil {
+	if err := c.WaitForHandshakeComplete(context.Background()); err != nil {
 		return err
 	}
 	log.Print("handshake complete")

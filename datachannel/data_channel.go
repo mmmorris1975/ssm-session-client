@@ -72,7 +72,7 @@ func (c *SsmDataChannel) Close() error {
 
 // WaitForHandshakeComplete blocks further processing until the required SSM handshake sequence used for
 // port-based clients (including ssh) completes.
-func (c *SsmDataChannel) WaitForHandshakeComplete() error {
+func (c *SsmDataChannel) WaitForHandshakeComplete(ctx context.Context) error {
 	buf := make([]byte, 4096)
 
 	for {
@@ -83,6 +83,11 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 			c.outMsgBuf = nil
 			c.handshakeCh = nil
 			return nil
+		case <-ctx.Done():
+			c.inMsgBuf = nil
+			c.outMsgBuf = nil
+			c.handshakeCh = nil
+			return context.Canceled
 		default:
 			n, err := c.Read(buf)
 			if err != nil {
@@ -150,7 +155,7 @@ func (c *SsmDataChannel) WriteTo(w io.Writer) (n int64, err error) {
 					return n, err
 				}
 			}
-			
+
 			if isEOF {
 				return n, nil
 			}
@@ -229,12 +234,13 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 	return int(msg.payloadLength), err
 }
 
-//nolint:gocognit,gocyclo
 // HandleMsg takes the unprocessed message bytes from the websocket connection (a la Read()), unmarshals the data
 // and takes the appropriate action based on the message type.  Messages which have an actionable payload (output
 // payload types, and channel closed payloads) will have that data returned.  Errors will be returned for unknown/
 // unhandled message or payload types.  A ChannelClosed message type will return an io.EOF error to indicate that
 // this SSM data channel is shutting down and should no longer be used.
+//
+//nolint:gocognit,gocyclo
 func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 	m := new(AgentMessage)
 	if err := m.UnmarshalBinary(data); err != nil {
