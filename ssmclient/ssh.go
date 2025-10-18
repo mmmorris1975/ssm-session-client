@@ -1,6 +1,7 @@
 package ssmclient
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -46,7 +47,7 @@ func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 	installSignalHandler(c)
 
 	zap.S().Info("waiting for handshake")
-	if err := c.WaitForHandshakeComplete(); err != nil {
+	if err := c.WaitForHandshakeComplete(context.Background()); err != nil {
 		return err
 	}
 	zap.S().Info("handshake complete")

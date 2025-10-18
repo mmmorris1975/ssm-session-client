@@ -1,11 +1,14 @@
 package ssmclient
 
 import (
+	"context"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 
 	"github.com/alexbacchin/ssm-session-client/config"
@@ -31,7 +34,24 @@ type PortForwardingInput struct {
 // configure the session.  The aws.Config parameter will be used to call the AWS SSM StartSession
 // API, which is used as part of establishing the websocket communication channel.
 //
-//nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
+// The context's cancellation function is used to close the port forwarding session.
+func PortForwardingSessionWithContext(ctx context.Context, cfg aws.Config, opts *PortForwardingInput) error {
+	c, err := openDataChannel(cfg, opts)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// Both the basic and muxing plugins support TerminateSession on the agent side.
+		_ = c.TerminateSession()
+		_ = c.Close()
+	}()
+
+	return startPortForwardingSession(ctx, c, opts)
+}
+
+// PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
+// configure the session.  The aws.Config parameter will be used to call the AWS SSM StartSession
+// API, which is used as part of establishing the websocket communication channel.
 func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	c, err := openDataChannel(cfg, opts)
 	if err != nil {
@@ -49,7 +69,16 @@ func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	// possibility that the data channel is still valid
 	installSignalHandler(c)
 
-	if err = c.WaitForHandshakeComplete(); err != nil {
+	return startPortForwardingSession(context.Background(), c, opts)
+}
+
+// startPortForwardingSession is shared by PortForwardingSession and PortForwardingSessionWithContext
+// and handles the main port forwarding session loop.
+//
+//nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
+func startPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChannel, opts *PortForwardingInput) error {
+
+	if err := c.WaitForHandshakeComplete(ctx); err != nil {
 		return err
 	}
 
@@ -57,8 +86,19 @@ func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 	if err != nil {
 		return err
 	}
-	defer lsnr.Close()
-	zap.S().Infof("listening on %s", lsnr.Addr())
+
+	closeFunc := &sync.Once{}
+	closeLsnr := func() {
+		closeFunc.Do(func() { _ = lsnr.Close() })
+	}
+	defer closeLsnr()
+
+	go func() {
+		<-ctx.Done()
+		lsnr.Close()
+	}()
+
+	log.Printf("listening on %s", lsnr.Addr())
 
 	doneCh := make(chan bool)
 	errCh := make(chan error)
@@ -69,9 +109,13 @@ outer:
 		var conn net.Conn
 		conn, err = lsnr.Accept()
 		if err != nil {
-			// not fatal, just wait for next (maybe unless lsnr is dead?)
-			zap.S().Info(err)
-			continue
+			select {
+			case <-ctx.Done():
+				break outer // Expected error due to shutdown
+			default:
+				log.Print(err)
+				continue
+			}
 		}
 
 		go func() {
@@ -93,7 +137,7 @@ outer:
 			case data, ok := <-inCh:
 				if !ok {
 					// incoming websocket channel is closed, which is fatal
-					_ = conn.Close()
+					closeLsnr()
 					break outer
 				}
 
@@ -105,17 +149,20 @@ outer:
 					// I can't think of a good reason why we'd ever end up here, but if we do
 					// we should stop the world
 					zap.S().Info("errCh closed")
-					_ = conn.Close()
+					closeLsnr()
 					break outer
 				}
 
 				// any write to errCh means at least 1 of the goroutines has exited
 				zap.S().Info(er)
 				break inner
+			case <-ctx.Done():
+				closeLsnr()
+				break outer
 			}
 		}
 
-		_ = conn.Close()
+		closeLsnr()
 	}
 	return nil
 }
