@@ -89,7 +89,7 @@ func (c *SsmDataChannel) Close() error {
 
 // WaitForHandshakeComplete blocks further processing until the required SSM handshake sequence used for
 // port-based clients (including ssh) completes.
-func (c *SsmDataChannel) WaitForHandshakeComplete() error {
+func (c *SsmDataChannel) WaitForHandshakeComplete(ctx context.Context) error {
 	buf := make([]byte, 4096)
 
 	for {
@@ -100,6 +100,11 @@ func (c *SsmDataChannel) WaitForHandshakeComplete() error {
 			c.outMsgBuf = nil
 			c.handshakeCh = nil
 			return nil
+		case <-ctx.Done():
+			c.inMsgBuf = nil
+			c.outMsgBuf = nil
+			c.handshakeCh = nil
+			return context.Canceled
 		default:
 			n, err := c.Read(buf)
 			if err != nil {
