@@ -13,7 +13,6 @@ var ssmSshCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		pkg.InitializeClient()
 		pkg.StartSSHSession(args[0])
-
 	},
 }
 

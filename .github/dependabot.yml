@@ -4,7 +4,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     groups:
       aws-sdk:
         patterns:
@@ -12,6 +12,7 @@ updates:
           - "github.com/aws/aws-sdk-go-v2"
           - "github.com/aws/aws-sdk-go-v2/*"          
       golang:
-        applies-to: security-updates
         patterns:
-          - "golang.org*"
+          - "golang.org/*"
+          - "google.golang.org/*"
+          - "github.com/spf13/*"

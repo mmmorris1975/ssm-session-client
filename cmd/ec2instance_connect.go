@@ -14,7 +14,6 @@ var ec2InstanceConnectCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		pkg.InitializeClient()
 		pkg.StartEC2InstanceConnect(args[0])
-
 	},
 }
 

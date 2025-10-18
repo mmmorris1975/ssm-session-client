@@ -55,7 +55,6 @@ func init() {
 	viper.BindPFlag("sso-login", rootCmd.PersistentFlags().Lookup("sso-login"))
 	viper.BindPFlag("proxy-url", rootCmd.PersistentFlags().Lookup("proxy-url"))
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
-
 }
 
 // preRun is a Cobra pre-run function that is called before the command is executed
