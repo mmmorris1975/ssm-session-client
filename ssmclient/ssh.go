@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+
 	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
@@ -72,6 +73,7 @@ func SSHSession(cfg aws.Config, opts *PortForwardingInput) error {
 
 // SSHPluginSession delegates the execution of the SSM SSH integration to the AWS-managed session manager plugin code,
 // bypassing this libraries internal websocket code and connection management.
+
 func SSHPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
 	var port = "22"
 	if opts.RemotePort > 0 {

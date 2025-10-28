@@ -1,19 +1,12 @@
 package ssmclient
 
 import (
-	"context"
-
-	"github.com/aws/session-manager-plugin/src/datachannel"
-	"github.com/aws/session-manager-plugin/src/log"
-	"github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
-	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
-	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/google/uuid"
 )
 
-func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
+// Eliminated in favor of ShellSession function since AWS code appears to be poorly maintained and not working.
+/* func PluginSession4(cfg aws.Config, input *ssm.StartSessionInput) error {
 	out, err := ssm.NewFromConfig(cfg).StartSession(context.Background(), input)
 	if err != nil {
 		return err
@@ -25,6 +18,7 @@ func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
 	}
 
 	ssmSession := new(session.Session)
+	ssmSession.Handlers.Copy() = session.Handlers{}
 	ssmSession.SessionId = *out.SessionId
 	ssmSession.StreamUrl = *out.StreamUrl
 	ssmSession.TokenValue = *out.TokenValue
@@ -34,4 +28,9 @@ func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
 	ssmSession.DataChannel = &datachannel.DataChannel{}
 
 	return ssmSession.Execute(log.Logger(false, ssmSession.ClientId))
+}
+*/
+
+func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
+	return ShellSession(cfg, *(input).Target)
 }
