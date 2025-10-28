@@ -13,8 +13,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/mmmorris1975/ssm-session-client/datachannel"
 	"golang.org/x/net/netutil"
+
+	"github.com/mmmorris1975/ssm-session-client/datachannel"
 )
 
 // PortForwardingInput configures the port forwarding session parameters.
@@ -167,6 +168,7 @@ outer:
 
 // PortPluginSession delegates the execution of the SSM port forwarding to the AWS-managed session manager plugin code,
 // bypassing this libraries internal websocket code and connection management.
+
 func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
 	documentName := "AWS-StartPortForwardingSession"
 	parameters := map[string][]string{
