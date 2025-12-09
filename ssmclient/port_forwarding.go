@@ -229,7 +229,7 @@ func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 			}
 
 			if len(payload) > 0 {
-				inCh <- payload
+				inCh <- append([]byte(nil), payload...)
 			}
 		}
 	}()
