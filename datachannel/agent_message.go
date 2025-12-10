@@ -96,7 +96,8 @@ func (m *AgentMessage) UnmarshalBinary(data []byte) error {
 
 	payloadLenEnd := m.headerLength + 4
 	m.payloadLength = binary.BigEndian.Uint32(data[m.headerLength:payloadLenEnd])
-	m.Payload = data[payloadLenEnd : payloadLenEnd+m.payloadLength]
+	// Copy payload to avoid data corruption when the underlying buffer is reused
+	m.Payload = append([]byte(nil), data[payloadLenEnd:payloadLenEnd+m.payloadLength]...)
 
 	return m.ValidateMessage()
 }
