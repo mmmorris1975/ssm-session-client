@@ -254,10 +254,14 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 		if c.outMsgBuf != nil {
 			c.outMsgBuf.Remove(m.SequenceNumber)
 		}
+		// Don't send ACK for ACK messages
+		return nil, nil
 	case PausePublication:
 		c.pausePub = true
+		return nil, nil
 	case StartPublication:
 		c.pausePub = false
+		return nil, nil
 	case OutputStreamData:
 		switch m.PayloadType {
 		case Output:
