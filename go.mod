@@ -24,7 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.29.8
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.3
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	gopkg.in/ini.v1 v1.67.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
