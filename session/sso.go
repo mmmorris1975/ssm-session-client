@@ -1,6 +1,6 @@
 //Source: github.com/peterHoburg/aws-sdk-go-v2-sso-login
 
-package pkg
+package session
 
 import (
 	"context"
@@ -321,11 +321,14 @@ func ssoLoginFlow(
 	headed bool,
 	loginTimeout time.Duration,
 ) (*cacheFileData, error) {
-	ssoOidcConfig, err := BuildAWSConfig(ctx, "ssooidc")
-	if err != nil {
-		return nil, err
-	}
-	ssoOidcClient := ssooidc.NewFromConfig(ssoOidcConfig)
+	// RegisterClient, StartDeviceAuthorization, and CreateToken are all unsigned
+	// SSO OIDC operations — they require only the SSO region, not AWS credentials.
+	// Using BuildAWSConfig here would attempt to resolve credentials for the
+	// profile (e.g. assume-role chains), which fails before any login can occur.
+	ssoOidcClient := ssooidc.NewFromConfig(aws.Config{
+		Region:     profile.ssoRegion,
+		HTTPClient: ProxyHttpClient(),
+	})
 
 	currentUser, err := user.Current()
 	if err != nil {

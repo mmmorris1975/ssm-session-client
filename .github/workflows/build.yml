@@ -7,23 +7,61 @@ on:
       - 'releases/**'
       - 'feature/**'
   pull_request:
-    types: [opened, reopened]
-  workflow_dispatch:    
-    
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version-file: 'go.mod'
+          cache: true
 
       - name: Install dependencies
         run: go mod download
 
       - name: Build
         run: go build -o ssm-session-client .
+        shell: bash
+
+      - name: Run tests
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+        shell: bash
+
+      - name: Display coverage
+        run: go tool cover -func=coverage.out
+        shell: bash
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Cross-compile for Windows
+        run: GOOS=windows GOARCH=amd64 go build -o ssm-session-client.exe .
+
+      - name: Cross-compile for macOS (Intel)
+        run: GOOS=darwin GOARCH=amd64 go build -o ssm-session-client-darwin-amd64 .
+
+      - name: Cross-compile for macOS (Apple Silicon)
+        run: GOOS=darwin GOARCH=arm64 go build -o ssm-session-client-darwin-arm64 .
+
+      - name: Cross-compile for Linux ARM64
+        run: GOOS=linux GOARCH=arm64 go build -o ssm-session-client-linux-arm64 .

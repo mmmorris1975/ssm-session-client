@@ -1,36 +1,25 @@
-package pkg
+package session
 
 import (
 	"context"
-	"net"
-	"strings"
 
 	"github.com/alexbacchin/ssm-session-client/config"
 	"github.com/alexbacchin/ssm-session-client/ssmclient"
 	"go.uber.org/zap"
 )
 
-// StartSSMPortForwarder starts a port forwarding session using AWS SSM
+// StartSSMPortForwarder starts a port forwarding session using AWS SSM.
 func StartSSMPortForwarder(target string, sourcePort int) error {
-	var port int
-	if !strings.Contains(target, ":") {
-		target = target + ":22"
+	_, host, port, err := ParseHostPort(target, "", 22)
+	if err != nil {
+		zap.S().Fatal(err)
 	}
-	t, p, err := net.SplitHostPort(target)
 
-	if err == nil {
-		port, err = net.LookupPort("tcp", p)
-		if err != nil {
-			zap.S().Fatal(err)
-		}
-	} else {
-		t = target
-	}
 	ssmcfg, err := BuildAWSConfig(context.Background(), "ssm")
 	if err != nil {
 		zap.S().Fatal(err)
 	}
-	tgt, err := ssmclient.ResolveTarget(t, ssmcfg)
+	tgt, err := ssmclient.ResolveTarget(host, ssmcfg)
 	if err != nil {
 		zap.S().Fatal(err)
 	}
@@ -48,5 +37,4 @@ func StartSSMPortForwarder(target string, sourcePort int) error {
 		return ssmclient.PortPluginSession(ssmMessagesCfg, &in)
 	}
 	return ssmclient.PortForwardingSession(ssmMessagesCfg, &in)
-
 }

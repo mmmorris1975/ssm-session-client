@@ -1,8 +1,9 @@
 name: binaries
 
+# This workflow is kept for ad-hoc re-builds of an existing release.
+# The primary release pipeline is .github/workflows/release.yml which
+# runs acceptance tests before creating a release and building binaries.
 on:
-  release:
-    types: [created]
   workflow_dispatch:
 
 jobs:
@@ -11,23 +12,99 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
-        goos: [linux, windows, darwin]
+        # build and publish in parallel: linux/386, linux/amd64, linux/arm64, darwin/amd64, darwin/arm64
+        goos: [linux, darwin]
         goarch: ["386", amd64, arm64]
         exclude:
           - goarch: "386"
-            goos: darwin 
+            goos: darwin
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
+    - name: Extract Go version from go.mod
+      id: go-version
+      run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
     - uses: wangyoucao577/go-release-action@v1.53
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        goversion: "https://go.dev/dl/go1.24.9.linux-amd64.tar.gz"
+        goversion: ${{ steps.go-version.outputs.version }}
         binary_name: "ssm-session-client"
         ldflags: "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{  github.ref_name }}'"
-        
+
+  releases-windows-signed:
+    name: Release Signed Windows Binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [arm64, amd64]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Extract Go version from go.mod
+      id: go-version
+      run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ steps.go-version.outputs.version }}
+
+    - name: Install osslsigncode
+      run: sudo apt-get update && sudo apt-get install -y osslsigncode
+
+    - name: Build Windows binary
+      env:
+        GOOS: windows
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        go build \
+          -ldflags "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{ github.ref_name }}'" \
+          -o ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+          .
+
+    - name: Sign Windows binary
+      env:
+        CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+        CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      run: |
+        if [ -n "$CERT_PFX" ]; then
+          echo "$CERT_PFX" | base64 -d > cert.pfx
+          osslsigncode sign \
+            -pkcs12 cert.pfx \
+            -pass "$CERT_PASSWORD" \
+            -n "ssm-session-client" \
+            -i "https://github.com/${{ github.repository }}" \
+            -t "http://timestamp.digicert.com" \
+            -in ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+            -out ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}-signed.exe
+          mv ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}-signed.exe \
+             ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe
+          rm -f cert.pfx
+          echo "✓ Binary signed successfully"
+        else
+          echo "⚠ Skipping signing - WINDOWS_CERT_PFX secret not set"
+        fi
+
+    - name: Generate checksums
+      run: |
+        md5sum ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe > \
+          ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.md5
+        sha256sum ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe > \
+          ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.sha256
+
+    - name: Upload to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release upload ${{ github.ref_name }} \
+          ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+          ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.md5 \
+          ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.sha256 \
+          --clobber
+
   releases-matrix-arm:
     name: Release Go Binary ARM
     runs-on: ubuntu-latest
@@ -35,15 +112,20 @@ jobs:
       matrix:
         goos: [linux]
         goarch: [arm]
-        goarm: ["6","7"]             
+        goarm: ["6","7"]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
+    - name: Extract Go version from go.mod
+      id: go-version
+      run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
     - uses: wangyoucao577/go-release-action@v1.53
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
         goarm: ${{ matrix.goarm }}
-        goversion: "https://go.dev/dl/go1.24.9.linux-amd64.tar.gz"
-        binary_name: "ssm-session-client"        
+        goversion: ${{ steps.go-version.outputs.version }}
+        binary_name: "ssm-session-client"
         ldflags: "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{  github.ref_name }}'"

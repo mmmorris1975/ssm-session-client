@@ -1,0 +1,259 @@
+name: Release
+
+# Trigger on version tags (e.g. v1.2.3, v0.8.0-rc1).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write   # OIDC for AWS acceptance tests
+  contents: write   # Create releases and upload assets
+
+env:
+  GO_VERSION_FILE: go.mod
+  TF_VERSION: "1.9"
+  AWS_REGION: ap-southeast-2
+  MAKEFILE: test/scripts/Makefile
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stage 1: Unit tests (fast gate — fails early before provisioning infra)
+  # ---------------------------------------------------------------------------
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+
+      - name: Run unit tests
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Display coverage
+        run: go tool cover -func=coverage.out
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Acceptance tests (requires AWS infrastructure)
+  # ---------------------------------------------------------------------------
+  acceptance-tests:
+    name: Acceptance tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
+
+      - name: Set up OpenTofu ${{ env.TF_VERSION }}
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ACCEPTANCE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Provision infrastructure
+        id: tf_apply
+        run: make -f ${{ env.MAKEFILE }} acceptance-prepare AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Wait for SSM agent
+        run: make -f ${{ env.MAKEFILE }} acceptance-wait-ssm AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Run acceptance tests
+        run: make -f ${{ env.MAKEFILE }} acceptance-run-local AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Destroy infrastructure (always runs)
+        if: always() && steps.tf_apply.outcome != 'skipped'
+        run: make -f ${{ env.MAKEFILE }} acceptance-destroy AWS_REGION=${{ env.AWS_REGION }}
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Create GitHub release (after all tests pass)
+  # ---------------------------------------------------------------------------
+  create-release:
+    name: Create GitHub release
+    needs: acceptance-tests
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history for changelog generation
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous tag to generate changelog from.
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+          if [ -z "$PREV_TAG" ]; then
+            echo "body=Initial release" >> "$GITHUB_OUTPUT"
+          else
+            LOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" -- . ':!test/')
+            # Escape for multiline GitHub output.
+            {
+              echo "body<<CHANGELOG_EOF"
+              echo "## Changes since ${PREV_TAG}"
+              echo ""
+              echo "$LOG"
+              echo "CHANGELOG_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Detect pre-release from tag (e.g. v1.0.0-rc1, v0.8.0-beta).
+          PRERELEASE_FLAG=""
+          if echo "${{ github.ref_name }}" | grep -qE '\-(alpha|beta|rc)'; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes "${{ steps.changelog.outputs.body }}" \
+            $PRERELEASE_FLAG
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: Build and upload release binaries (parallel matrix)
+  # ---------------------------------------------------------------------------
+  release-binaries:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: ["386", amd64, arm64]
+        exclude:
+          - goarch: "386"
+            goos: darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Go version from go.mod
+        id: go-version
+        run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      - uses: wangyoucao577/go-release-action@v1.53
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: ${{ matrix.goos }}
+          goarch: ${{ matrix.goarch }}
+          goversion: ${{ steps.go-version.outputs.version }}
+          binary_name: ssm-session-client
+          ldflags: "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{ github.ref_name }}'"
+
+  release-binaries-arm:
+    name: Build linux/arm${{ matrix.goarm }}
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarm: ["6", "7"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Go version from go.mod
+        id: go-version
+        run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      - uses: wangyoucao577/go-release-action@v1.53
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: linux
+          goarch: arm
+          goarm: ${{ matrix.goarm }}
+          goversion: ${{ steps.go-version.outputs.version }}
+          binary_name: ssm-session-client
+          ldflags: "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{ github.ref_name }}'"
+
+  release-windows-signed:
+    name: Build windows/${{ matrix.goarch }} (signed)
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract Go version from go.mod
+        id: go-version
+        run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.go-version.outputs.version }}
+
+      - name: Install osslsigncode
+        run: sudo apt-get update && sudo apt-get install -y osslsigncode
+
+      - name: Build Windows binary
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build \
+            -ldflags "-X 'github.com/alexbacchin/ssm-session-client/cmd.version=${{ github.ref_name }}'" \
+            -o ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+            .
+
+      - name: Sign Windows binary
+        env:
+          CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if [ -n "$CERT_PFX" ]; then
+            echo "$CERT_PFX" | base64 -d > cert.pfx
+            osslsigncode sign \
+              -pkcs12 cert.pfx \
+              -pass "$CERT_PASSWORD" \
+              -n "ssm-session-client" \
+              -i "https://github.com/${{ github.repository }}" \
+              -t "http://timestamp.digicert.com" \
+              -in ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+              -out ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}-signed.exe
+            mv ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}-signed.exe \
+               ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe
+            rm -f cert.pfx
+            echo "Binary signed successfully"
+          else
+            echo "Skipping signing - WINDOWS_CERT_PFX secret not set"
+          fi
+
+      - name: Generate checksums
+        run: |
+          md5sum ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe > \
+            ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.md5
+          sha256sum ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe > \
+            ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.sha256
+
+      - name: Upload to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} \
+            ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe \
+            ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.md5 \
+            ssm-session-client-${{ github.ref_name }}-windows-${{ matrix.goarch }}.exe.sha256 \
+            --clobber

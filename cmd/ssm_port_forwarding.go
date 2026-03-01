@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/alexbacchin/ssm-session-client/pkg"
+	"github.com/alexbacchin/ssm-session-client/session"
 	"github.com/spf13/cobra"
 )
 
@@ -20,8 +20,8 @@ var portForwardingCmd = &cobra.Command{
 			fmt.Println("Invalid source port:", args[1])
 			return
 		}
-		pkg.InitializeClient()
-		pkg.StartSSMPortForwarder(args[0], sourcePort)
+		session.InitializeClient()
+		session.StartSSMPortForwarder(args[0], sourcePort)
 	},
 }
 

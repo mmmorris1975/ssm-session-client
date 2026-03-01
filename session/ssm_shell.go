@@ -1,4 +1,4 @@
-package pkg
+package session
 
 import (
 	"context"

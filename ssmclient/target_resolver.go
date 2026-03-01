@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/alexbacchin/ssm-session-client/config"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -19,6 +20,8 @@ var (
 	ErrInvalidTargetFormat = errors.New("invalid target format")
 	// ErrNoInstanceFound is the error returned if a resolver was unable to find an instance.
 	ErrNoInstanceFound = errors.New("no instances returned from lookup")
+	// ErrMultipleInstancesFound is the error returned when an alias resolves to more than one running instance.
+	ErrMultipleInstancesFound = errors.New("multiple instances found for alias; target must resolve to a single instance")
 
 	// RFC 1918 and 6598 address blocks.
 	privateNets = []net.IPNet{
@@ -36,10 +39,11 @@ type TargetResolver interface {
 
 // ResolveTarget attempts to find the instance ID of the target using a pre-defined resolution order.
 // The first check will see if the target is already in the format of an EC2 instance ID.  Next, if
-// the cfg parameter is not nil, checking by EC2 instance tags or private IPv4 IP address is performed.
-// Finally, resolving by DNS TXT record will be attempted.
+// the cfg parameter is not nil, checking by alias, EC2 instance tags or private IPv4 IP address is
+// performed. Finally, resolving by DNS TXT record will be attempted.
 func ResolveTarget(target string, cfg aws.Config) (string, error) {
 	resolvers := []TargetResolver{
+		NewAliasResolver(cfg, config.Flags().Aliases),
 		NewTagResolver(cfg),
 		NewIPResolver(cfg),
 	}
@@ -50,7 +54,8 @@ func ResolveTarget(target string, cfg aws.Config) (string, error) {
 // ResolveTargetChain attempts to find the instance ID of the target using the provided list of TargetResolvers.
 // The first check will always be to see if the target is already in the format of an EC2 instance ID before
 // moving on to the resolution logic of the provided TargetResolvers.  If a resolver returns an error, the next
-// resolver in the chain is checked.  If all resolvers fail to find an instance ID an error is returned.
+// resolver in the chain is checked, unless the error is ErrMultipleInstancesFound which stops the chain
+// immediately.  If all resolvers fail to find an instance ID an error is returned.
 func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string, err error) {
 	var matched bool
 	matched, err = regexp.MatchString(`^m?i-[[:xdigit:]]{8,}$`, target)
@@ -64,12 +69,21 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string
 
 	for _, res := range resolvers {
 		inst, err = res.Resolve(target)
-		if err != nil {
-			continue
+		if err == nil {
+			return inst, nil
 		}
-		return inst, nil
+		if errors.Is(err, ErrMultipleInstancesFound) {
+			return "", err
+		}
 	}
 	return "", ErrNoInstanceFound
+}
+
+// NewAliasResolver returns a TargetResolver that looks up an alias name from the provided map
+// and resolves it to an EC2 instance by tag. It is strict: if more than one instance matches
+// the alias tag filter, an error is returned instead of silently picking the first.
+func NewAliasResolver(cfg aws.Config, aliases map[string]config.TargetAlias) *AliasResolver {
+	return &AliasResolver{EC2Resolver: &EC2Resolver{cfg: cfg}, aliases: aliases}
 }
 
 // NewTagResolver is a TargetResolver which knows how to find an EC2 instance using tags.
@@ -108,6 +122,30 @@ func (r *DNSResolver) Resolve(target string) (string, error) {
 	}
 
 	return "", ErrNoInstanceFound
+}
+
+/*
+ * Alias Resolver looks up the target string in the configured alias map. If a matching alias is found,
+ * it queries EC2 for instances with the corresponding tag key and value. Unlike other resolvers, it
+ * returns ErrMultipleInstancesFound (stopping the resolver chain) when more than one running instance
+ * matches the alias filter, since an alias must refer to a unique host.
+ */
+type AliasResolver struct {
+	*EC2Resolver
+	aliases map[string]config.TargetAlias
+}
+
+func (r *AliasResolver) Resolve(target string) (string, error) {
+	alias, ok := r.aliases[strings.TrimSpace(target)]
+	if !ok {
+		return "", ErrInvalidTargetFormat
+	}
+
+	f := types.Filter{
+		Name:   aws.String(fmt.Sprintf("tag:%s", alias.TagName)),
+		Values: []string{alias.TagValue},
+	}
+	return r.EC2Resolver.ResolveStrict(f)
 }
 
 /*
@@ -204,27 +242,48 @@ func isPrivateAddr(addr net.IP) bool {
 }
 
 /*
- *  EC2 Resolver calls the EC2 DescribeInstances API with a provided filter, which will return at most 1
- *  instance ID. If more than 1 instance matches the filter, the 1st instance ID in the list is returned.
+ *  EC2 Resolver calls the EC2 DescribeInstances API with a provided filter. Resolve returns at most 1
+ *  instance ID; if more than 1 instance matches the filter, the 1st instance ID in the list is returned
+ *  with a warning. ResolveStrict returns an error if more than 1 instance matches the filter.
  */
 type EC2Resolver struct {
 	cfg aws.Config
 }
 
-func (r *EC2Resolver) Resolve(filter ...types.Filter) (string, error) {
+func (r *EC2Resolver) resolve(strict bool, filter ...types.Filter) (string, error) {
 	filter = append(filter, types.Filter{Name: aws.String("instance-state-name"), Values: []string{"running"}})
 	o, err := ec2.NewFromConfig(r.cfg).DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{Filters: filter})
 	if err != nil {
 		return "", err
 	}
 
+	var firstID string
+	count := 0
 	for _, res := range o.Reservations {
-		if len(res.Instances) > 0 {
-			if len(res.Instances) > 1 {
-				zap.S().Info("WARNING: more than 1 instance found, using 1st value")
+		for _, inst := range res.Instances {
+			count++
+			if count == 1 {
+				firstID = *inst.InstanceId
 			}
-			return *res.Instances[0].InstanceId, nil
 		}
 	}
-	return "", ErrNoInstanceFound
+
+	if count == 0 {
+		return "", ErrNoInstanceFound
+	}
+	if strict && count > 1 {
+		return "", ErrMultipleInstancesFound
+	}
+	if count > 1 {
+		zap.S().Info("WARNING: more than 1 instance found, using 1st value")
+	}
+	return firstID, nil
+}
+
+func (r *EC2Resolver) Resolve(filter ...types.Filter) (string, error) {
+	return r.resolve(false, filter...)
+}
+
+func (r *EC2Resolver) ResolveStrict(filter ...types.Filter) (string, error) {
+	return r.resolve(true, filter...)
 }

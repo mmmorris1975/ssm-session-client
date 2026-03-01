@@ -1,0 +1,176 @@
+name: Acceptance Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: "AWS region for test infrastructure"
+        required: false
+        default: "ap-southeast-2"
+      run_rdp_tests:
+        description: "Provision a Windows instance and run RDP tests"
+        required: false
+        default: false
+        type: boolean
+      destroy_on_failure:
+        description: "Destroy infrastructure even on test failure"
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    # Run nightly at 02:00 UTC.
+    - cron: "0 2 * * *"
+
+permissions:
+  id-token: write   # Required for OIDC token exchange.
+  contents: read
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'ap-southeast-2' }}
+  GO_VERSION: "1.24"
+  TF_VERSION: "1.9"
+  RUN_RDP: ${{ github.event.inputs.run_rdp_tests || 'false' }}
+  MAKEFILE: test/scripts/Makefile
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux runner: all non-RDP acceptance tests
+  # ---------------------------------------------------------------------------
+  acceptance-linux:
+    name: Acceptance tests (Linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up OpenTofu ${{ env.TF_VERSION }}
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # ARN of the GitHub Actions OIDC role created by test/infra/iam.tf.
+          # Set this in: Settings → Secrets → Actions → AWS_ACCEPTANCE_ROLE_ARN
+          role-to-assume: ${{ secrets.AWS_ACCEPTANCE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Provision infrastructure
+        id: tf_apply
+        run: make -f ${{ env.MAKEFILE }} acceptance-prepare AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Wait for SSM agent
+        run: make -f ${{ env.MAKEFILE }} acceptance-wait-ssm AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Export Terraform outputs as env vars
+        working-directory: test/infra
+        run: |
+          tofu output -json | \
+            jq -r 'to_entries[] | "TF_OUTPUT_\(.key | ascii_upcase)=\(.value.value)"' \
+            >> "$GITHUB_ENV"
+
+      - name: Run acceptance tests
+        id: tests
+        run: make -f ${{ env.MAKEFILE }} acceptance-run-local AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Destroy infrastructure (always runs)
+        if: always() && steps.tf_apply.outcome != 'skipped'
+        run: make -f ${{ env.MAKEFILE }} acceptance-destroy AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Upload outputs.json on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-linux-outputs
+          path: test/infra/outputs.json
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Windows runner: RDP tests (//go:build acceptance && windows)
+  # Only runs when run_rdp_tests input is true or on nightly schedule.
+  # ---------------------------------------------------------------------------
+  acceptance-windows-rdp:
+    name: RDP acceptance tests (Windows)
+    runs-on: windows-latest
+    # Run on manual trigger with run_rdp_tests=true, or on the nightly schedule.
+    if: github.event.inputs.run_rdp_tests == 'true' || github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up OpenTofu ${{ env.TF_VERSION }}
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ACCEPTANCE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Provision infrastructure (with Windows instance)
+        id: tf_apply_win
+        shell: bash
+        run: >
+          make -f ${{ env.MAKEFILE }} acceptance-prepare
+          AWS_REGION=${{ env.AWS_REGION }}
+          TF_EXTRA_VARS='-var="create_windows_instance=true"'
+
+      - name: Wait for SSM agent
+        shell: bash
+        run: make -f ${{ env.MAKEFILE }} acceptance-wait-ssm AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Export Terraform outputs as env vars
+        working-directory: test/infra
+        shell: bash
+        run: |
+          tofu output -json | \
+            jq -r 'to_entries[] | "TF_OUTPUT_\(.key | ascii_upcase)=\(.value.value)"' \
+            >> "$GITHUB_ENV"
+
+      - name: Run RDP acceptance tests (Windows)
+        id: rdp_tests
+        shell: pwsh
+        run: |
+          go test ./test/acceptance/... `
+            -tags "acceptance windows" `
+            -v `
+            -timeout 30m `
+            -count=1 `
+            -run "RDP"
+
+      - name: Destroy infrastructure (always runs)
+        if: always() && steps.tf_apply_win.outcome != 'skipped'
+        shell: bash
+        run: >
+          make -f ${{ env.MAKEFILE }} acceptance-destroy
+          AWS_REGION=${{ env.AWS_REGION }}
+          TF_EXTRA_VARS='-var="create_windows_instance=true"'
+
+      - name: Upload outputs and key on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-windows-outputs
+          # Note: rdp_test_key.pem is sensitive; only upload on failure for debugging.
+          path: test/infra/outputs.json
+          retention-days: 3

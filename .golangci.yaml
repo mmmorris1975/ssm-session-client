@@ -10,29 +10,24 @@ linters-settings:
     min-complexity: 15
   gocyclo:
     min-complexity: 15
-  golint:
-    min-confidence: 0.9
-  govet:
-    check-shadowing: true
+  revive:
+    rules:
+      - name: exported
+        severity: warning
   lll:
     line-length: 132
-  maligned:
-    suggest-new: true
 
 linters:
   disable-all: true
   enable:
     # These are the default linters
-    - deadcode
     - errcheck
     - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
 
     # These are some of the not enabled by default linters
     - bodyclose
@@ -49,21 +44,18 @@ linters:
     - godot
     - gofmt
     #- goimports
-    - golint
+    - revive
     #- gomnd
     #- goprintffuncname
     - gosec
     #- interfacer
     #- lll
-    #- maligned
     #- misspell
     #- nakedret
     - noctx
     #- nolintlint
     #- prealloc
     #- rowserrcheck
-    #- scopelint
-    #- stylecheck
     - unconvert
     - unparam
     #- whitespace

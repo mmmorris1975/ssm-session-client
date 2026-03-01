@@ -1,4 +1,4 @@
-package pkg
+package session
 
 import (
 	"context"
@@ -45,6 +45,18 @@ func InitializeClient() {
 		return
 	}
 
+	// Propagate region and profile flags to env vars so the embedded session-manager-plugin
+	// (which uses the v1 AWS SDK) can pick them up alongside any other v1-based code.
+	if _, ok := os.LookupEnv("AWS_DEFAULT_REGION"); !ok && config.Flags().AWSRegion != "" {
+		os.Setenv("AWS_DEFAULT_REGION", config.Flags().AWSRegion)
+	}
+	if _, ok := os.LookupEnv("AWS_REGION"); !ok && config.Flags().AWSRegion != "" {
+		os.Setenv("AWS_REGION", config.Flags().AWSRegion)
+	}
+	if _, ok := os.LookupEnv("AWS_PROFILE"); !ok && config.Flags().AWSProfile != "" {
+		os.Setenv("AWS_PROFILE", config.Flags().AWSProfile)
+	}
+
 	if !config.IsSSMSessionManagerPluginInstalled() {
 		config.Flags().UseSSMSessionPlugin = false
 	}
@@ -59,6 +71,10 @@ func InitializeClient() {
 	if _, ok := os.LookupEnv("AWS_ENDPOINT_URL_EC2"); !ok && config.Flags().EC2VpcEndpoint != "" {
 		os.Setenv("AWS_ENDPOINT_URL_EC2", "https://"+config.Flags().EC2VpcEndpoint)
 		zap.S().Infoln("Setting EC2 endpoint to:", os.Getenv("AWS_ENDPOINT_URL_EC2"))
+	}
+	if _, ok := os.LookupEnv("AWS_ENDPOINT_URL_KMS"); !ok && config.Flags().KMSVpcEndpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL_KMS", "https://"+config.Flags().KMSVpcEndpoint)
+		zap.S().Infoln("Setting KMS endpoint to:", os.Getenv("AWS_ENDPOINT_URL_KMS"))
 	}
 	if config.Flags().UseSSOLogin {
 		loginInput := &SSOLoginInput{
@@ -118,6 +134,10 @@ func BuildAWSConfig(ctx context.Context, service string) (aws.Config, error) {
 		}
 	case "ec2":
 		if config.Flags().EC2VpcEndpoint == "" {
+			cfg.HTTPClient = ProxyHttpClient()
+		}
+	case "kms":
+		if config.Flags().KMSVpcEndpoint == "" {
 			cfg.HTTPClient = ProxyHttpClient()
 		}
 	case "sts":
