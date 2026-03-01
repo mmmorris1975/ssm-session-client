@@ -38,3 +38,12 @@ go.work.sum
 *.vsix
 .ssm-session-client.*
 config.yaml
+ssm-session-client
+
+# Acceptance test generated files — never commit these
+test/infra/outputs.json
+test/infra/rdp_test_key.pem
+test/infra/.terraform/
+test/infra/.terraform.lock.hcl
+test/infra/terraform.tfstate
+test/infra/terraform.tfstate.backup

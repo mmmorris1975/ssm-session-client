@@ -44,6 +44,37 @@ func FindSSHPublicKey() (string, error) {
 	return string(pubKey), nil
 }
 
+// FindSSHPrivateKey searches for an SSH private key file. If overridePath is
+// non-empty it is checked first. Otherwise it checks SSHKeyFile from config,
+// then the standard ~/.ssh/id_ed25519 and ~/.ssh/id_rsa paths.
+func FindSSHPrivateKey(overridePath string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	var paths []string
+	if overridePath != "" {
+		paths = append(paths, overridePath)
+	}
+	if singleFlags.SSHKeyFile != "" {
+		paths = append(paths, singleFlags.SSHKeyFile)
+	}
+	paths = append(paths,
+		filepath.Join(homeDir, ".ssh", "id_ed25519"),
+		filepath.Join(homeDir, ".ssh", "id_rsa"),
+	)
+
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			zap.S().Info("Found SSH private key at:", path)
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("no SSH private key found")
+}
+
 func IsSSMSessionManagerPluginInstalled() bool {
 	pluginPath, err := exec.LookPath("session-manager-plugin")
 	if err != nil {

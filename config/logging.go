@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"runtime"
@@ -12,13 +13,18 @@ import (
 
 var logConfig zap.Config
 
-func CreateLogger() *zap.Logger {
+func CreateLogger() (*zap.Logger, error) {
 	logConfig = zap.Config{
 		Level: zap.NewAtomicLevelAt(zapcore.InfoLevel),
 	}
 
+	logFolder, err := getLogFolder()
+	if err != nil {
+		return nil, err
+	}
+
 	file := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   path.Join(getLogFolder(), "app.log"),
+		Filename:   path.Join(logFolder, "app.log"),
 		MaxSize:    10, // megabytes
 		MaxBackups: 3,
 		MaxAge:     1, // days
@@ -30,41 +36,44 @@ func CreateLogger() *zap.Logger {
 
 	fileEncoder := zapcore.NewJSONEncoder(productionCfg)
 
-	stdout := zapcore.AddSync(os.Stdout)
+	// Only log to stderr at WARN level or above to avoid interfering with
+	// ProxyCommand usage where stderr output can confuse SSH clients (e.g. VS Code).
+	stderr := zapcore.AddSync(os.Stderr)
 
 	developmentCfg := zap.NewDevelopmentEncoderConfig()
 	developmentCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 
 	consoleEncoder := zapcore.NewConsoleEncoder(developmentCfg)
 	core := zapcore.NewTee(
-		zapcore.NewCore(consoleEncoder, stdout, logConfig.Level),
+		zapcore.NewCore(consoleEncoder, stderr, zap.NewAtomicLevelAt(zapcore.WarnLevel)),
 		zapcore.NewCore(fileEncoder, file, logConfig.Level),
 	)
 
-	return zap.New(core)
+	return zap.New(core), nil
 }
 
-func SetLogLevel(logLevel string) {
+func SetLogLevel(logLevel string) error {
 	var level zapcore.Level
 	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
-		panic("invalid log level: " + logLevel)
+		return fmt.Errorf("invalid log level %q: %w", logLevel, err)
 	}
 	logConfig.Level.SetLevel(level)
+	return nil
 }
 
-func getLogFolder() string {
+func getLogFolder() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		panic("unable to determine user home directory")
+		return "", fmt.Errorf("unable to determine user home directory: %w", err)
 	}
 
 	switch os := runtime.GOOS; os {
 	case "windows":
-		return homeDir + "\\AppData\\Local\\ssm-session-client\\logs"
+		return homeDir + "\\AppData\\Local\\ssm-session-client\\logs", nil
 	case "darwin":
-		return homeDir + "/Library/Logs/ssm-session-client"
+		return homeDir + "/Library/Logs/ssm-session-client", nil
 	default: // Linux and other Unix-like systems
-		return homeDir + "/.ssm-session-client/logs"
+		return homeDir + "/.ssm-session-client/logs", nil
 	}
 }
 

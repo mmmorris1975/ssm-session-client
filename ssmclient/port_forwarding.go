@@ -27,7 +27,8 @@ type PortForwardingInput struct {
 	Target     string
 	RemotePort int
 	LocalPort  int
-	Host       string // optional
+	Host       string          // optional
+	ReadyCh    chan struct{}    // optional; closed when the TCP listener is ready
 }
 
 // PortForwardingSession starts a port forwarding session using the PortForwardingInput parameters to
@@ -73,15 +74,52 @@ func PortForwardingSession(cfg aws.Config, opts *PortForwardingInput) error {
 }
 
 // startPortForwardingSession is shared by PortForwardingSession and PortForwardingSessionWithContext
-// and handles the main port forwarding session loop.
-//
-//nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
+// and routes to either multiplexed or basic port forwarding based on agent version.
 func startPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChannel, opts *PortForwardingInput) error {
-
 	if err := c.WaitForHandshakeComplete(ctx); err != nil {
 		return err
 	}
 
+	agentVersion := c.AgentVersion()
+
+	// Agent version 3.0.196.0+ supports multiplexed port forwarding
+	if agentVersionGte(agentVersion, "3.0.196.0") {
+		zap.S().Infof("using multiplexed port forwarding (agent version: %s)", agentVersion)
+		return startMuxPortForwardingSession(ctx, c, opts)
+	}
+
+	zap.S().Infof("using basic port forwarding (agent version: %s)", agentVersion)
+	return startBasicPortForwardingSession(ctx, c, opts)
+}
+
+// startMuxPortForwardingSession handles multiplexed port forwarding for modern SSM agents.
+func startMuxPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChannel, opts *PortForwardingInput) error {
+	// Create listener without connection limit for multiplexed mode
+	lsnr, err := createListenerUnlimited(opts.LocalPort)
+	if err != nil {
+		return err
+	}
+	defer lsnr.Close()
+
+	if opts.ReadyCh != nil {
+		close(opts.ReadyCh)
+	}
+
+	go func() {
+		<-ctx.Done()
+		lsnr.Close()
+	}()
+
+	log.Printf("listening on %s", lsnr.Addr())
+
+	return startMuxPortForwarding(ctx, c, lsnr, c.AgentVersion())
+}
+
+// startBasicPortForwardingSession handles legacy single-connection port forwarding.
+//
+//nolint:funlen,gocognit // it's long, but not overly hard to read despite what the gocognit says
+func startBasicPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChannel, opts *PortForwardingInput) error {
+	// Create listener with single connection limit for basic mode
 	lsnr, err := createListener(opts.LocalPort)
 	if err != nil {
 		return err
@@ -92,6 +130,10 @@ func startPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChann
 		closeFunc.Do(func() { _ = lsnr.Close() })
 	}
 	defer closeLsnr()
+
+	if opts.ReadyCh != nil {
+		close(opts.ReadyCh)
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -192,13 +234,22 @@ func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
 }
 
 func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
+	documentName := "AWS-StartPortForwardingSession"
+	parameters := map[string][]string{
+		"localPortNumber": {strconv.Itoa(opts.LocalPort)},
+		"portNumber":      {strconv.Itoa(opts.RemotePort)},
+	}
+
+	// Use remote host document if a host is specified
+	if opts.Host != "" {
+		documentName = "AWS-StartPortForwardingSessionToRemoteHost"
+		parameters["host"] = []string{opts.Host}
+	}
+
 	in := &ssm.StartSessionInput{
-		DocumentName: aws.String("AWS-StartPortForwardingSession"),
+		DocumentName: aws.String(documentName),
 		Target:       aws.String(opts.Target),
-		Parameters: map[string][]string{
-			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
-			"portNumber":      {strconv.Itoa(opts.RemotePort)},
-		},
+		Parameters:   parameters,
 	}
 
 	c := new(datachannel.SsmDataChannel)
@@ -242,15 +293,20 @@ func messageChannel(c datachannel.DataChannel, errCh chan error) chan []byte {
 	return inCh
 }
 
+// createListener creates a TCP listener limited to a single connection (for basic port forwarding).
 func createListener(port int) (net.Listener, error) {
 	l, err := net.Listen("tcp", net.JoinHostPort("localhost", strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}
 
-	// use limit listener for now, eventually maybe we'll add muxing
-	// REF: https://github.com/aws/amazon-ssm-agent/blob/master/agent/session/plugins/port/port_mux.go
+	// Limit to single connection for basic (non-multiplexed) mode
 	return netutil.LimitListener(l, 1), nil
+}
+
+// createListenerUnlimited creates a TCP listener without connection limits (for multiplexed port forwarding).
+func createListenerUnlimited(port int) (net.Listener, error) {
+	return net.Listen("tcp", net.JoinHostPort("localhost", strconv.Itoa(port)))
 }
 
 // shared with ssh.go.

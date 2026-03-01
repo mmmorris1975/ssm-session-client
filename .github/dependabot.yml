@@ -4,15 +4,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 1
     groups:
-      aws-sdk:
+      go-dependencies:
         patterns:
-          - "github.com/aws/aws-sdk-go"
-          - "github.com/aws/aws-sdk-go-v2"
-          - "github.com/aws/aws-sdk-go-v2/*"          
-      golang:
-        patterns:
-          - "golang.org/*"
-          - "google.golang.org/*"
-          - "github.com/spf13/*"
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

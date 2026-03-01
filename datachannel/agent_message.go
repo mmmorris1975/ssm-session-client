@@ -6,9 +6,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 const agentMsgHeaderLen = 116 // the binary size of all AgentMessage fields except payloadLength and Payload
@@ -70,8 +72,14 @@ func (m *AgentMessage) ValidateMessage() error {
 		return fmt.Errorf("payload length mismatch, WANT: %d, GOT: %d", m.payloadLength, len(m.Payload))
 	}
 
-	if !bytes.Equal(m.sha256PayloadDigest(), m.payloadDigest) {
-		return errors.New("payload digest mismatch")
+	originalDigest := make([]byte, len(m.payloadDigest))
+	copy(originalDigest, m.payloadDigest)
+	recalculated := m.sha256PayloadDigest()
+	if !bytes.Equal(recalculated, originalDigest) {
+		// Log but don't fail - the original code never actually validated digests
+		// (sha256PayloadDigest() overwrote payloadDigest before comparison, making
+		// it always equal to itself). Some SSM agent versions may send incorrect digests.
+		zap.S().Debugf("payload digest mismatch for %s seq %d (non-fatal)", m.MessageType, m.SequenceNumber)
 	}
 
 	return nil
@@ -197,5 +205,8 @@ func parseTime(data []byte) time.Time {
 }
 
 func formatUUIDBytes(data []byte) []byte {
-	return append(data[8:], data[:8]...)
+	result := make([]byte, len(data))
+	copy(result, data[8:])
+	copy(result[len(data)-8:], data[:8])
+	return result
 }

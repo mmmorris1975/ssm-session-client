@@ -115,6 +115,27 @@ type HandshakeCompletePayload struct {
 	CustomerMessage         string
 }
 
+// KMSEncryptionRequest is the ActionParameters sent from the agent when KMS encryption is requested.
+type KMSEncryptionRequest struct {
+	KMSKeyId string
+}
+
+// KMSEncryptionResponse is the ActionResult sent back to the agent with the encrypted data key.
+type KMSEncryptionResponse struct {
+	KMSCipherTextKey  []byte
+	KMSCipherTextHash string
+}
+
+// EncryptionChallengeRequest is the challenge payload sent from the agent to verify encryption keys.
+type EncryptionChallengeRequest struct {
+	Challenge []byte
+}
+
+// EncryptionChallengeResponse is the response sent back to the agent with the re-encrypted challenge.
+type EncryptionChallengeResponse struct {
+	Challenge []byte
+}
+
 // ChannelClosedPayload is the payload in a ChannelClosed message send from the agent.
 type ChannelClosedPayload struct {
 	MessageType   string

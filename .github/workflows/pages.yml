@@ -1,0 +1,65 @@
+name: Deploy GitHub Pages
+
+on:
+  # Deploy automatically when a release is published
+  release:
+    types: [published]
+  # Also redeploy when documentation source changes on main
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+  # Allow manual triggers with an optional version override
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label to display (e.g. v1.2.3). Leave empty to fetch from GitHub API at runtime."
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one concurrent deployment; cancel any in-progress run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject release version into docs
+        run: |
+          # Priority: release event tag > manual input > tag ref > nothing (JS fetches at runtime)
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then TAG="${{ inputs.version }}"; fi
+          if [ -z "$TAG" ]; then
+            REF="${{ github.ref_name }}"
+            if echo "$REF" | grep -qE '^v[0-9]'; then TAG="$REF"; fi
+          fi
+
+          if [ -n "$TAG" ]; then
+            echo "Injecting version: $TAG"
+            sed -i "s|%%VERSION%%|$TAG|g" docs/index.html
+          else
+            echo "No version to inject — JavaScript will fetch the latest release at runtime."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

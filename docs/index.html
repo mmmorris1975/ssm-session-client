@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSM Session Client – AWS SSM sessions without bastion hosts</title>
+  <meta name="description" content="A self-contained CLI for AWS SSM Session Manager. Shell, SSH, port forwarding, and RDP over SSM – no bastion hosts, no exposed ports, no AWS CLI plugin required.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" crossorigin="anonymous">
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <a href="#overview" class="header-brand">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect width="24" height="24" rx="4" fill="#FF9900"/>
+      <path d="M7 12h10M12 7l5 5-5 5" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    SSM&nbsp;<span class="brand-accent">Session Client</span>
+  </a>
+  <nav class="header-nav">
+    <a href="https://github.com/alexbacchin/ssm-session-client/releases" class="btn btn-primary" target="_blank" rel="noopener">
+      &#8659;&nbsp;Download
+    </a>
+    <a href="https://github.com/alexbacchin/ssm-session-client" class="btn btn-outline-light" target="_blank" rel="noopener">
+      GitHub
+    </a>
+  </nav>
+  <button class="menu-btn" id="menuBtn" aria-label="Open navigation menu">&#9776;</button>
+</header>
+
+<!-- Mobile overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ===== PAGE LAYOUT ===== -->
+<div class="page-layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar" id="sidebar">
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <ul>
+        <li>
+          <a href="#overview">Overview</a>
+        </li>
+        <li>
+          <a href="#install">Install</a>
+          <ul>
+            <li><a href="#install-macos">macOS</a></li>
+            <li><a href="#install-linux">Linux</a></li>
+            <li><a href="#install-windows">Windows</a></li>
+            <li><a href="#install-plugin">Session Manager Plugin</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#configuration">Configuration</a>
+          <ul>
+            <li><a href="#config-aws-creds">AWS Credentials</a></li>
+            <li><a href="#config-options">Config Options</a></li>
+            <li><a href="#config-file">Config File</a></li>
+            <li><a href="#config-sso">SSO Login</a></li>
+            <li><a href="#config-endpoints">VPC Endpoints</a></li>
+            <li><a href="#config-targets">Target Lookup</a></li>
+            <li><a href="#config-aliases">Aliases</a></li>
+            <li><a href="#config-reconnect">Reconnection</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#modes">Session Modes</a>
+          <ul>
+            <li><a href="#mode-shell">Shell</a></li>
+            <li><a href="#mode-ssh">SSH (ProxyCommand)</a></li>
+            <li><a href="#mode-ssh-direct">SSH Direct</a></li>
+            <li><a href="#mode-vscode">VSCode Remote SSH</a></li>
+            <li><a href="#mode-instance-connect">Instance Connect</a></li>
+            <li><a href="#mode-port-forwarding">Port Forwarding</a></li>
+            <li><a href="#mode-rdp">RDP</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#troubleshooting">Troubleshooting</a>
+          <ul>
+            <li><a href="#logs">Log Files</a></li>
+            <li><a href="#debug">Debug Mode</a></li>
+            <li><a href="#common-issues">Common Issues</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#contributing">Contributing</a>
+          <ul>
+            <li><a href="#build">Building</a></li>
+            <li><a href="#unit-tests">Unit Tests</a></li>
+            <li><a href="#acceptance-tests">Acceptance Tests</a></li>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="content">
+
+    <!-- ============================================================
+         OVERVIEW
+         ============================================================ -->
+    <section id="overview">
+
+      <div class="hero">
+        <h1>SSM Session Client</h1>
+        <p class="hero-subtitle">
+          A self-contained binary for AWS SSM Session Manager. Access EC2 instances
+          via shell, native SSH, port forwarding, or RDP — without bastion hosts,
+          open inbound ports, or the AWS CLI plugin.
+        </p>
+        <div class="hero-ctas">
+          <a href="#install" class="btn btn-primary btn-lg">Get Started</a>
+          <a href="https://github.com/alexbacchin/ssm-session-client/releases"
+             class="btn btn-outline-dark btn-lg" target="_blank" rel="noopener"
+             id="downloadBtn">
+            &#8659;&nbsp;Download <span id="versionBadge">%%VERSION%%</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <h3>Interactive Shell</h3>
+          <p>Full terminal access to your instances via SSM. Supports ANSI colours and virtual terminal processing on Windows.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Native SSH — No Client Needed</h3>
+          <p>Built-in SSH using Go's crypto library. No external SSH client, no ProxyCommand. Works on Windows out of the box.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💻</div>
+          <h3>VSCode Remote SSH</h3>
+          <p>Drop-in replacement for the SSH executable in VSCode Remote SSH. Point <code>remote.SSH.path</code> at the binary and connect.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔀</div>
+          <h3>Port Forwarding</h3>
+          <p>Tunnel TCP traffic to private instances. Multiplexed connections for SSM agents v3.0.196.0+, single-connection fallback for older agents.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🖱️</div>
+          <h3>RDP (Windows targets)</h3>
+          <p>One command opens an RDP tunnel and launches <code>mstsc.exe</code>. Optional automatic password retrieval via the EC2 API.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔐</div>
+          <h3>PrivateLink Support</h3>
+          <p>Override SSM, SSM Messages, EC2, STS, and KMS endpoints. Works in VPN/Direct Connect environments where AWS PrivateLink replaces public endpoints.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔑</div>
+          <h3>EC2 Instance Connect</h3>
+          <p>Push an ephemeral public key via the EC2 Instance Connect API — no permanent SSH key management needed.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>AWS Identity Center SSO</h3>
+          <p>Automatic SSO device-code login with optional browser launch. No separate <code>aws sso login</code> step needed.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🏷️</div>
+          <h3>Flexible Target Lookup</h3>
+          <p>Resolve targets by instance ID, EC2 tag, IP address, DNS TXT record, or short aliases defined in your config file.</p>
+        </div>
+      </div>
+
+      <h2>Why use SSM Session Client instead of the AWS CLI?</h2>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>AWS CLI + Plugin</th>
+              <th>SSM Session Client</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Interactive shell access</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td>SSH ProxyCommand</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+            <tr><td>Native SSH (no external client)</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td>VSCode Remote SSH replacement</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td>EC2 Instance Connect integration</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td>Custom SSM Messages endpoint</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td>Works in AppLocker/AirLock environments</td><td class="no">✗</td><td class="yes">✓ (single binary)</td></tr>
+            <tr><td>Built-in SSO login</td><td class="no">Requires separate <code>aws sso login</code></td><td class="yes">✓ built-in</td></tr>
+            <tr><td>Target lookup by tag / IP / DNS</td><td class="no">✗</td><td class="yes">✓</td></tr>
+            <tr><td>RDP tunneling with auto password</td><td class="no">✗</td><td class="yes">✓ (Windows)</td></tr>
+            <tr><td>VPC endpoint overrides</td><td class="no">✗</td><td class="yes">✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>How it works</h2>
+      <p>
+        SSM Session Client uses the AWS SSM <code>StartSession</code> API to create an
+        encrypted WebSocket tunnel to your EC2 instance via the SSM Messages service.
+        All traffic flows through AWS — no inbound firewall rules, no bastion hosts,
+        no VPN to the instances themselves.
+      </p>
+      <p>
+        Access is controlled by IAM policy, not by distributing SSH keys. You grant
+        (or revoke) access to an instance with a policy change, and every session is
+        logged by AWS CloudTrail.
+      </p>
+      <p>
+        In environments where only AWS PrivateLink endpoints are reachable (VPN or
+        Direct Connect), the <code>ssmmessages-endpoint</code> flag replaces the public
+        <code>StreamUrl</code> returned by <code>StartSession</code> with your private endpoint.
+        This is the primary feature that makes SSM Session Client useful in air-gapped
+        or restricted networks.
+      </p>
+
+    </section>
+
+    <!-- ============================================================
+         INSTALL
+         ============================================================ -->
+    <section id="install">
+      <h1>Install</h1>
+      <p>
+        SSM Session Client is a single binary with no runtime dependencies. Download
+        the binary for your platform, make it executable, and add it to your
+        <code>PATH</code>.
+      </p>
+
+      <!-- macOS -->
+      <h2 id="install-macos">macOS</h2>
+
+      <div class="tab-group-wrapper">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="macos-arm64">Apple Silicon (arm64)</button>
+          <button class="tab-btn" data-tab="macos-amd64">Intel (amd64)</button>
+        </div>
+
+        <div class="tab-content active" id="macos-arm64">
+<pre><code class="language-bash"># Download the latest binary
+curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-darwin-arm64 \
+  -o /usr/local/bin/ssm-session-client
+
+# Make it executable
+chmod +x /usr/local/bin/ssm-session-client
+
+# Verify
+ssm-session-client --version</code></pre>
+        </div>
+
+        <div class="tab-content" id="macos-amd64">
+<pre><code class="language-bash"># Download the latest binary
+curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-darwin-amd64 \
+  -o /usr/local/bin/ssm-session-client
+
+# Make it executable
+chmod +x /usr/local/bin/ssm-session-client
+
+# Verify
+ssm-session-client --version</code></pre>
+        </div>
+      </div>
+
+      <div class="callout callout-warning">
+        <strong>macOS Gatekeeper:</strong> The first time you run the binary, macOS may block it
+        as an unidentified developer. Run the following command to remove the quarantine flag, then try again:
+        <br><br>
+        <code>xattr -d com.apple.quarantine /usr/local/bin/ssm-session-client</code>
+      </div>
+
+      <!-- Linux -->
+      <h2 id="install-linux">Linux</h2>
+
+      <div class="tab-group-wrapper">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="linux-amd64">x86-64 (amd64)</button>
+          <button class="tab-btn" data-tab="linux-arm64">ARM64</button>
+          <button class="tab-btn" data-tab="linux-386">x86 (386)</button>
+          <button class="tab-btn" data-tab="linux-arm">ARMv6/v7</button>
+        </div>
+
+        <div class="tab-content active" id="linux-amd64">
+<pre><code class="language-bash">sudo curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-linux-amd64 \
+  -o /usr/local/bin/ssm-session-client
+
+sudo chmod +x /usr/local/bin/ssm-session-client
+
+ssm-session-client --version</code></pre>
+        </div>
+
+        <div class="tab-content" id="linux-arm64">
+<pre><code class="language-bash">sudo curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-linux-arm64 \
+  -o /usr/local/bin/ssm-session-client
+
+sudo chmod +x /usr/local/bin/ssm-session-client
+
+ssm-session-client --version</code></pre>
+        </div>
+
+        <div class="tab-content" id="linux-386">
+<pre><code class="language-bash">sudo curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-linux-386 \
+  -o /usr/local/bin/ssm-session-client
+
+sudo chmod +x /usr/local/bin/ssm-session-client
+
+ssm-session-client --version</code></pre>
+        </div>
+
+        <div class="tab-content" id="linux-arm">
+<pre><code class="language-bash"># For ARMv7 (Raspberry Pi 3/4, most modern ARM boards)
+sudo curl -fsSL \
+  https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-linux-arm7 \
+  -o /usr/local/bin/ssm-session-client
+
+# For ARMv6 (Raspberry Pi Zero/1)
+# Replace "arm7" with "arm6" in the URL above
+
+sudo chmod +x /usr/local/bin/ssm-session-client
+
+ssm-session-client --version</code></pre>
+        </div>
+      </div>
+
+      <!-- Windows -->
+      <h2 id="install-windows">Windows</h2>
+
+      <div class="tab-group-wrapper">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="win-amd64">x86-64 (amd64)</button>
+          <button class="tab-btn" data-tab="win-arm64">ARM64</button>
+        </div>
+
+        <div class="tab-content active" id="win-amd64">
+<pre><code class="language-powershell"># Download to a folder already on your PATH (e.g. C:\tools)
+$url = "https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-windows-amd64.exe"
+Invoke-WebRequest -Uri $url -OutFile "C:\tools\ssm-session-client.exe"
+
+# Verify
+ssm-session-client --version</code></pre>
+        </div>
+
+        <div class="tab-content" id="win-arm64">
+<pre><code class="language-powershell">$url = "https://github.com/alexbacchin/ssm-session-client/releases/latest/download/ssm-session-client-windows-arm64.exe"
+Invoke-WebRequest -Uri $url -OutFile "C:\tools\ssm-session-client.exe"
+
+ssm-session-client --version</code></pre>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Windows binaries are code-signed.</strong> If Windows Defender SmartScreen
+        warns about the binary, click <em>More info</em> &rarr; <em>Run anyway</em>. The
+        binary is signed with a trusted certificate.
+        <br><br>
+        <strong>No OpenSSH required.</strong> The <code>ssh-direct</code> command and the
+        VSCode Remote SSH integration use a built-in Go SSH client — you do not need to
+        install the Windows Optional Feature "OpenSSH Client".
+      </div>
+
+      <h2 id="install-plugin">Optional: AWS Session Manager Plugin</h2>
+      <p>
+        The AWS Session Manager Plugin is <strong>not required</strong> for most features.
+        It is only needed when <strong>KMS encryption</strong> is enabled for SSM sessions,
+        because key exchange requires the plugin's encryption routines.
+      </p>
+      <p>
+        If the plugin is installed, <code>ssm-session-client</code> will use it automatically
+        (controlled by the <code>--ssm-session-plugin</code> flag). Install instructions:
+        <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"
+           target="_blank" rel="noopener">Install the Session Manager plugin for the AWS CLI</a>.
+      </p>
+
+    </section>
+
+    <!-- ============================================================
+         CONFIGURATION
+         ============================================================ -->
+    <section id="configuration">
+      <h1>Configuration</h1>
+      <p>
+        <code>ssm-session-client</code> reads its configuration from three sources, in
+        order of precedence (highest first):
+      </p>
+      <ol>
+        <li><strong>Command-line flags</strong> — highest priority, override everything</li>
+        <li><strong>Environment variables</strong> — prefix <code>SSC_</code> (e.g. <code>SSC_AWS_REGION</code>)</li>
+        <li><strong>YAML config file</strong> — lowest priority, supplies defaults</li>
+      </ol>
+
+      <!-- AWS Credentials -->
+      <h2 id="config-aws-creds">AWS Credentials</h2>
+      <p>
+        <code>ssm-session-client</code> uses the standard AWS SDK credential chain. No
+        special configuration is needed beyond what you would set up for the AWS CLI.
+        Refer to the AWS documentation:
+        <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html"
+           target="_blank" rel="noopener">Authentication and access credentials for the AWS CLI</a>.
+      </p>
+      <p>Common methods:</p>
+      <ul>
+        <li>Named profiles in <code>~/.aws/credentials</code> and <code>~/.aws/config</code></li>
+        <li>Environment variables: <code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code></li>
+        <li>EC2 instance metadata / ECS task role</li>
+        <li>AWS Identity Center (SSO) — see <a href="#config-sso">SSO Login</a> below</li>
+      </ul>
+
+      <!-- Config Options Table -->
+      <h2 id="config-options">Configuration Options</h2>
+
+      <div class="table-wrap">
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Config file / Flag</th>
+              <th>Environment variable</th>
+              <th>AWS SDK variable</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Config file path</td><td><code>config</code></td><td><code>SSC_CONFIG</code></td><td>—</td></tr>
+            <tr><td>Log level (<code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>)</td><td><code>log-level</code></td><td><code>SSC_LOG_LEVEL</code></td><td>—</td></tr>
+            <tr><td>AWS profile name</td><td><code>aws-profile</code></td><td><code>SSC_AWS_PROFILE</code></td><td><code>AWS_PROFILE</code></td></tr>
+            <tr><td>AWS region</td><td><code>aws-region</code></td><td><code>SSC_AWS_REGION</code></td><td><code>AWS_REGION</code> / <code>AWS_DEFAULT_REGION</code></td></tr>
+            <tr><td>Trigger SSO login flow (<code>true</code>/<code>false</code>)</td><td><code>sso-login</code></td><td><code>SSC_SSO_LOGIN</code></td><td>—</td></tr>
+            <tr><td>Open browser for SSO (<code>true</code>/<code>false</code>)</td><td><code>sso-open-browser</code></td><td><code>SSC_SSO_OPEN_BROWSER</code></td><td>—</td></tr>
+            <tr><td>STS endpoint override</td><td><code>sts-endpoint</code></td><td><code>SSC_STS_ENDPOINT</code></td><td><code>AWS_ENDPOINT_URL_STS</code></td></tr>
+            <tr><td>EC2 endpoint override</td><td><code>ec2-endpoint</code></td><td><code>SSC_EC2_ENDPOINT</code></td><td><code>AWS_ENDPOINT_URL_EC2</code></td></tr>
+            <tr><td>SSM endpoint override</td><td><code>ssm-endpoint</code></td><td><code>SSC_SSM_ENDPOINT</code></td><td><code>AWS_ENDPOINT_URL_SSM</code></td></tr>
+            <tr><td>SSM Messages WebSocket endpoint</td><td><code>ssmmessages-endpoint</code></td><td><code>SSC_SSMMESSAGES_ENDPOINT</code></td><td>—</td></tr>
+            <tr><td>HTTP proxy URL</td><td><code>proxy-url</code></td><td><code>SSC_PROXY_URL</code></td><td><code>HTTPS_PROXY</code></td></tr>
+            <tr><td>Use Session Manager plugin</td><td><code>ssm-session-plugin</code></td><td><code>SSC_SSM_SESSION_PLUGIN</code></td><td>—</td></tr>
+            <tr><td>Enable auto-reconnect</td><td><code>enable-reconnect</code></td><td><code>SSC_ENABLE_RECONNECT</code></td><td>—</td></tr>
+            <tr><td>Max reconnection attempts</td><td><code>max-reconnects</code></td><td><code>SSC_MAX_RECONNECTS</code></td><td>—</td></tr>
+            <tr><td>Target aliases (config file only)</td><td><code>aliases</code></td><td>—</td><td>—</td></tr>
+            <tr><td>Target alias (CLI flag, repeatable)</td><td><code>--alias name=tag:val</code></td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Note:</strong> <code>proxy-url</code> only applies to services that do not have a
+        custom endpoint set. <code>ssmmessages-endpoint</code> replaces the <code>StreamUrl</code>
+        returned by <code>StartSession</code> so that the WebSocket connection uses your private endpoint.
+      </div>
+
+      <!-- Config File -->
+      <h2 id="config-file">Config File</h2>
+      <p>
+        The default config file path is <code>$HOME/.ssm-session-client.yaml</code> (Linux/macOS)
+        or <code>%USERPROFILE%\.ssm-session-client.yaml</code> (Windows).
+      </p>
+      <p>The file is searched in this order:</p>
+      <ol>
+        <li>Current working directory</li>
+        <li>User home directory (<code>$HOME</code> / <code>%USERPROFILE%</code>)</li>
+        <li>Directory containing the <code>ssm-session-client</code> executable</li>
+      </ol>
+      <p>Pass a custom path with <code>--config=/path/to/config.yaml</code>.</p>
+
+      <h3>Minimal config (AWS profile + region)</h3>
+<pre><code class="language-yaml">aws-profile: my-profile
+aws-region: ap-southeast-2</code></pre>
+
+      <!-- SSO -->
+      <h2 id="config-sso">AWS Identity Center SSO Login</h2>
+      <p>
+        <code>ssm-session-client</code> can trigger an AWS SSO device-code login automatically
+        before each session. This eliminates the need to run <code>aws sso login</code> separately.
+      </p>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <strong>Configure the AWS CLI for SSO.</strong> Follow the AWS guide:
+            <a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html"
+               target="_blank" rel="noopener">Configuring the AWS CLI to use AWS IAM Identity Center</a>.
+            This creates a profile section in <code>~/.aws/config</code> with <code>sso_start_url</code>,
+            <code>sso_account_id</code>, <code>sso_role_name</code>, and <code>sso_region</code>.
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <strong>Set <code>aws-profile</code> and <code>sso-login: true</code></strong> in
+            your config file (or pass them as flags/env vars).
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <strong>(Optional)</strong> Set <code>sso-open-browser: true</code> if your
+            machine can open a browser. Otherwise, copy the verification URL printed to the
+            terminal and open it in any browser.
+          </div>
+        </li>
+      </ol>
+
+      <h3>SSO config file example</h3>
+<pre><code class="language-yaml">aws-profile: my-sso-profile
+aws-region: ap-southeast-2
+sso-login: true
+sso-open-browser: true</code></pre>
+
+      <!-- VPC Endpoints -->
+      <h2 id="config-endpoints">VPC Endpoints (PrivateLink)</h2>
+      <p>
+        In environments where AWS services are only reachable via
+        <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html"
+           target="_blank" rel="noopener">AWS PrivateLink</a> (VPN or Direct Connect), you
+        can override each service endpoint individually.
+      </p>
+      <p>
+        The <code>ssmmessages-endpoint</code> flag is the critical one: the <code>StartSession</code>
+        API always returns a public <code>StreamUrl</code>. This flag replaces that URL with
+        your private VPC endpoint so the WebSocket tunnel stays entirely within your private network.
+      </p>
+
+      <h3>Config file with VPC endpoint overrides</h3>
+<pre><code class="language-yaml">aws-profile: sandbox
+aws-region: us-west-2
+
+# VPC endpoint DNS names (from your VPC endpoint console/outputs)
+ec2-endpoint:          vpce-059c3b85db66f8165-mzb6o9nb.ec2.us-west-2.vpce.amazonaws.com
+ssm-endpoint:          vpce-06ef6f173680a1306-bt58rzff.ssm.us-west-2.vpce.amazonaws.com
+ssmmessages-endpoint:  vpce-0e5e5b0c558a14bf2-r3p6zkdm.ssmmessages.us-west-2.vpce.amazonaws.com
+sts-endpoint:          vpce-0877b4abeb479ee06-arkdktlc.sts.us-west-2.vpce.amazonaws.com
+
+# Optional: HTTP proxy for services without a custom endpoint set
+proxy-url: http://myproxy:3128</code></pre>
+
+      <div class="callout callout-tip">
+        <strong>Tip:</strong> Required VPC endpoints for full SSM functionality:
+        <code>com.amazonaws.&lt;region&gt;.ssm</code>,
+        <code>com.amazonaws.&lt;region&gt;.ssmmessages</code>,
+        <code>com.amazonaws.&lt;region&gt;.ec2</code>, and
+        <code>com.amazonaws.&lt;region&gt;.sts</code>.
+        See the AWS documentation:
+        <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-create-vpc.html"
+           target="_blank" rel="noopener">Create VPC endpoints</a>.
+      </div>
+
+      <!-- Target Lookup -->
+      <h2 id="config-targets">Target Lookup</h2>
+      <p>
+        All session commands accept a <em>target</em> as the first argument. Targets are
+        resolved using the following chain (first match wins):
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Priority</th><th>Method</th><th>Example input</th><th>How it works</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><strong>Instance ID</strong></td><td><code>i-0abc1234def56789</code></td><td>Passed directly to the SSM API</td></tr>
+            <tr><td>2</td><td><strong>Alias</strong></td><td><code>devbox</code></td><td>Looks up the alias in your config, queries EC2 by tag — errors if more than one match</td></tr>
+            <tr><td>3</td><td><strong>EC2 tag</strong></td><td><code>Name:web-server</code></td><td>Queries EC2 for running instances with tag key=value</td></tr>
+            <tr><td>4</td><td><strong>IP address</strong></td><td><code>10.0.1.5</code></td><td>Queries EC2 by private or public IPv4</td></tr>
+            <tr><td>5</td><td><strong>DNS TXT record</strong></td><td><code>web.example.com</code></td><td>Resolves the hostname as a DNS TXT record expected to contain the instance ID</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Aliases -->
+      <h2 id="config-aliases">Target Aliases</h2>
+      <p>
+        Aliases map a short friendly name to an EC2 tag key + value. They are unique —
+        the lookup errors if more than one running instance matches, so the alias always
+        refers to exactly one host.
+      </p>
+
+      <h3>Define aliases in the config file</h3>
+<pre><code class="language-yaml">aliases:
+  devbox:
+    tag-name: Name
+    tag-value: my-devbox
+  prod-web:
+    tag-name: Environment
+    tag-value: production</code></pre>
+
+      <h3>Define aliases on the command line (repeatable)</h3>
+<pre><code class="language-bash"># Single alias on the fly
+ssm-session-client shell devbox --alias devbox=Name:my-devbox
+
+# Multiple aliases
+ssm-session-client shell prod-web \
+  --alias devbox=Name:my-devbox \
+  --alias prod-web=Environment:production</code></pre>
+
+      <p>CLI aliases override same-named aliases in the config file. Use aliases with any command:</p>
+<pre><code class="language-bash">ssm-session-client shell            devbox
+ssm-session-client ssh-direct       ec2-user@devbox
+ssm-session-client port-forwarding  devbox:443 8443</code></pre>
+
+      <!-- Reconnection -->
+      <h2 id="config-reconnect">Automatic Reconnection</h2>
+      <p>
+        <code>ssm-session-client</code> automatically reconnects when a WebSocket connection
+        drops. Configure it with:
+      </p>
+      <ul>
+        <li><code>--enable-reconnect</code> — enable/disable (default: <code>true</code>)</li>
+        <li><code>--max-reconnects</code> — maximum attempts before giving up (default: <code>5</code>, set <code>0</code> for unlimited)</li>
+      </ul>
+
+    </section>
+
+    <!-- ============================================================
+         SESSION MODES
+         ============================================================ -->
+    <section id="modes">
+      <h1>Session Modes</h1>
+
+      <!-- Shell -->
+      <h2 id="mode-shell">Shell</h2>
+      <p>
+        Opens an interactive terminal session on the target instance. Equivalent to
+        <code>aws ssm start-session</code>.
+      </p>
+<pre><code class="language-bash">ssm-session-client shell i-0bdb4f892de4bb54c
+ssm-session-client shell i-0bdb4f892de4bb54c --config=~/.ssm-session-client.yaml</code></pre>
+      <p>
+        On Windows, the shell command supports virtual terminal processing with ANSI escape
+        sequences for proper colour and formatting in remote shells.
+      </p>
+      <div class="callout callout-info">
+        <strong>KMS encryption:</strong> If KMS session encryption is enabled for your SSM
+        sessions, you must install the
+        <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"
+           target="_blank" rel="noopener">Session Manager plugin</a> and set
+        <code>ssm-session-plugin: true</code>.
+      </div>
+      <p>IAM reference: <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/getting-started-restrict-access-quickstart.html" target="_blank" rel="noopener">Sample IAM policies for Session Manager</a></p>
+
+      <!-- SSH ProxyCommand -->
+      <h2 id="mode-ssh">SSH (ProxyCommand)</h2>
+      <p>
+        Uses <code>ssm-session-client</code> as an SSH ProxyCommand, forwarding stdio to the
+        SSM data channel. The SSH client (system <code>ssh</code>) handles authentication and
+        encryption. Requires an SSH server on the target instance.
+      </p>
+
+      <h3>1. Configure SSH</h3>
+      <p>Add to <code>~/.ssh/config</code> (Linux/macOS) or <code>%USERPROFILE%\.ssh\config</code> (Windows):</p>
+<pre><code class="language-text">Host i-* mi-*
+  ProxyCommand ssm-session-client ssh %r@%h --config=~/.ssm-session-client.yaml</code></pre>
+
+      <h3>2. Automatically configure SSH (optional)</h3>
+<pre><code class="language-bash">ssm-session-client ssh add-proxy-command ec2-user@i-0bdb4f892de4bb54c</code></pre>
+
+      <h3>3. Connect</h3>
+<pre><code class="language-bash">ssh ec2-user@i-0bdb4f892de4bb54c</code></pre>
+
+      <p>IAM reference: <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-enable-ssh-connections.html" target="_blank" rel="noopener">Enabling SSH connections through Session Manager</a></p>
+
+      <!-- SSH Direct -->
+      <h2 id="mode-ssh-direct">SSH Direct (Native SSH Client)</h2>
+      <p>
+        A fully integrated SSH session over SSM using Go's native SSH library. No external
+        SSH client, no ProxyCommand, no SSH server listening on an open port.
+      </p>
+
+<pre><code class="language-bash"># Interactive session
+ssm-session-client ssh-direct ec2-user@i-0123456789abcdef0
+
+# With a specific key file
+ssm-session-client ssh-direct ec2-user@i-0123456789abcdef0 --ssh-key ~/.ssh/my-key
+
+# Run a single command
+ssm-session-client ssh-direct ec2-user@i-0123456789abcdef0 --exec "uptime"
+
+# Using EC2 Instance Connect (no SSH key management needed)
+ssm-session-client ssh-direct ec2-user@i-0123456789abcdef0 --instance-connect
+
+# Custom SSH port
+ssm-session-client ssh-direct ec2-user@i-0123456789abcdef0:2222</code></pre>
+
+      <h3>Authentication chain (tried in order)</h3>
+      <ol>
+        <li>Ephemeral key via EC2 Instance Connect (when <code>--instance-connect</code> is used)</li>
+        <li>SSH agent (<code>SSH_AUTH_SOCK</code>)</li>
+        <li>Private key file (<code>--ssh-key</code> or auto-discovered <code>~/.ssh/id_ed25519</code> / <code>~/.ssh/id_rsa</code>)</li>
+        <li>Password prompt (interactive)</li>
+      </ol>
+
+      <div class="callout callout-tip">
+        <strong>Host key verification</strong> uses Trust-On-First-Use (TOFU): on the first
+        connection the host key is saved to <code>~/.ssh/known_hosts</code>. Use
+        <code>--no-host-key-check</code> to skip verification (not recommended for production).
+      </div>
+
+      <!-- VSCode -->
+      <h2 id="mode-vscode">VSCode Remote SSH Integration</h2>
+      <p>
+        <code>ssm-session-client</code> can act as the SSH executable for VSCode Remote SSH,
+        eliminating the need for an external SSH client or ProxyCommand setup. This is
+        especially useful on Windows where OpenSSH may not be installed.
+      </p>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">
+            <strong>Configure the binary path in VSCode.</strong> Open
+            <em>Settings</em> (<code>Ctrl+,</code>) and search for
+            <code>remote.SSH.path</code>, or add to <code>settings.json</code>:
+<pre><code class="language-json">// Linux / macOS
+{ "remote.SSH.path": "/usr/local/bin/ssm-session-client" }
+
+// Windows
+{ "remote.SSH.path": "C:\\tools\\ssm-session-client.exe" }</code></pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <strong>Configure your SSH config file</strong>
+            (<code>~/.ssh/config</code> or <code>%USERPROFILE%\.ssh\config</code>):
+<pre><code class="language-text"># A named host mapped to an instance ID
+Host my-server
+  HostName i-0123456789abcdef0
+  User ec2-user
+
+# Wildcard for all instance IDs
+Host i-*
+  User ec2-user
+  StrictHostKeyChecking accept-new</code></pre>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <strong>Set AWS credentials.</strong> Use a
+            <a href="#config-file">config file</a>, environment variables
+            (<code>AWS_PROFILE</code>, <code>AWS_REGION</code>), or the standard
+            credential chain. The <code>ssm-session-client</code> config file is also
+            honoured for VPC endpoint overrides.
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <strong>Connect.</strong> In VSCode, open the Command Palette
+            (<code>Ctrl+Shift+P</code>) → <em>Remote-SSH: Connect to Host…</em> →
+            select your configured host.
+          </div>
+        </li>
+      </ol>
+
+      <div class="callout callout-info">
+        <strong>How it works:</strong> When VSCode invokes the binary with OpenSSH-style flags
+        (<code>-T -o ConnectTimeout=15 -F /path/to/config hostname bash</code>), the binary
+        detects SSH-compat mode, parses the SSH config to resolve the hostname to an EC2
+        instance ID, and establishes an SSH-over-SSM tunnel using the built-in Go SSH client.
+        <br><br>
+        <strong>Symlink mode:</strong> Alternatively, create a symlink named <code>ssh</code>
+        pointing to <code>ssm-session-client</code>. When invoked as <code>ssh</code>, it
+        always operates in OpenSSH-compat mode.
+      </div>
+
+      <!-- Instance Connect -->
+      <h2 id="mode-instance-connect">SSH with EC2 Instance Connect</h2>
+      <p>
+        The <code>instance-connect</code> command combines SSM session tunnelling with
+        <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-eic.html"
+           target="_blank" rel="noopener">EC2 Instance Connect</a>. It pushes an ephemeral SSH
+        public key to the instance before connecting, so no permanent key management is needed.
+        Authentication is controlled by the IAM action <code>ec2-instance-connect:SendSSHPublicKey</code>.
+      </p>
+
+      <div class="callout callout-warning">
+        <strong>Linux targets only.</strong> EC2 Instance Connect is only available for Linux
+        instances. Additionally, the EC2 Instance Connect API endpoint is not available via AWS
+        PrivateLink — internet access (or an HTTP proxy) is required for the key push step.
+      </div>
+
+<pre><code class="language-text"># SSH config using instance-connect as ProxyCommand
+Host i-*
+  ProxyCommand ssm-session-client instance-connect %r@%h
+
+# With a custom key pair
+Host i-*
+  IdentityFile ~/.ssh/custom
+  ProxyCommand ssm-session-client instance-connect %r@%h --ssh-public-key-file=~/.ssh/custom.pub</code></pre>
+
+<pre><code class="language-bash"># Automatically configure SSH
+ssm-session-client instance-connect add-proxy-command ec2-user@i-0bdb4f892de4bb54c
+
+# Then connect normally
+ssh ec2-user@i-0bdb4f892de4bb54c</code></pre>
+
+      <!-- Port Forwarding -->
+      <h2 id="mode-port-forwarding">Port Forwarding</h2>
+      <p>
+        Securely tunnel TCP traffic to a port on a private instance without SSH,
+        open firewall rules, or a bastion host.
+      </p>
+<pre><code class="language-bash"># Forward local port 8888 → instance port 443
+ssm-session-client port-forwarding i-0bdb4f892de4bb54c:443 8888
+
+# Auto-assign local port
+ssm-session-client port-forwarding i-0bdb4f892de4bb54c:443</code></pre>
+
+      <div class="callout callout-tip">
+        <strong>Multiplexed connections:</strong> For SSM agents v3.0.196.0 and above,
+        port forwarding automatically uses stream multiplexing (via <code>smux</code>),
+        allowing multiple concurrent TCP connections over a single SSM session. Older
+        agents fall back to single-connection mode automatically.
+      </div>
+
+      <!-- RDP -->
+      <h2 id="mode-rdp">RDP (Windows targets only)</h2>
+      <p>
+        The <code>rdp</code> command (Windows build only) sets up a port-forwarding tunnel
+        to port 3389 and launches <code>mstsc.exe</code> automatically.
+      </p>
+<pre><code class="language-powershell"># Basic RDP connection
+ssm-session-client rdp i-0bdb4f892de4bb54c
+
+# Retrieve the Windows administrator password automatically
+ssm-session-client rdp i-0bdb4f892de4bb54c --get-password --key-pair-file ~/.ssh/my-ec2-keypair.pem
+
+# Custom RDP port and username
+ssm-session-client rdp i-0bdb4f892de4bb54c --rdp-port 3390 --username admin</code></pre>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Flag</th><th>Default</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>--rdp-port</code></td><td>3389</td><td>Remote RDP port on the EC2 instance</td></tr>
+            <tr><td><code>--local-port</code></td><td>0 (auto)</td><td>Local port for the SSM tunnel</td></tr>
+            <tr><td><code>--get-password</code></td><td>false</td><td>Retrieve the Windows administrator password via the EC2 API</td></tr>
+            <tr><td><code>--key-pair-file</code></td><td>—</td><td>EC2 key pair private key file (required with <code>--get-password</code>)</td></tr>
+            <tr><td><code>--username</code></td><td>Administrator</td><td>RDP username</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        When <code>--get-password</code> is used, the password is retrieved from the EC2 API,
+        decrypted with the provided key pair, and copied to the clipboard for pasting into the
+        RDP credentials prompt.
+      </p>
+      <p>IAM: requires <code>ec2:GetPasswordData</code> in addition to standard SSM session permissions.</p>
+
+    </section>
+
+    <!-- ============================================================
+         TROUBLESHOOTING
+         ============================================================ -->
+    <section id="troubleshooting">
+      <h1>Troubleshooting</h1>
+
+      <!-- Log Files -->
+      <h2 id="logs">Log Files</h2>
+      <p>
+        Logs are written to both the console and a rotating log file. The log directory
+        depends on your operating system:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>OS</th><th>Log directory</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td class="log-path">%USERPROFILE%\AppData\Local\ssm-session-client\logs</td></tr>
+            <tr><td>macOS</td><td class="log-path">$HOME/Library/Logs/ssm-session-client</td></tr>
+            <tr><td>Linux / other Unix</td><td class="log-path">$HOME/.ssm-session-client/logs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Log files are rotated daily or when they reach 10 MB. The last three log files are kept.</p>
+
+      <!-- Debug Mode -->
+      <h2 id="debug">Debug Mode</h2>
+      <p>Set the log level to <code>debug</code> to capture verbose output including AWS API calls,
+        WebSocket messages, and connection lifecycle events.</p>
+
+      <h3>Via environment variable (recommended for quick debugging)</h3>
+<pre><code class="language-bash">SSC_LOG_LEVEL=debug ssm-session-client shell i-0bdb4f892de4bb54c</code></pre>
+
+      <h3>Via config file</h3>
+<pre><code class="language-yaml">log-level: debug</code></pre>
+
+      <h3>Via CLI flag</h3>
+<pre><code class="language-bash">ssm-session-client shell i-0bdb4f892de4bb54c --log-level=debug</code></pre>
+
+      <div class="callout callout-info">
+        Debug output is always written to the log file (see paths above), even when the
+        console is in a lower-verbosity mode. To see debug output in the terminal, set
+        <code>log-level: debug</code> in your config file or via the environment variable.
+      </div>
+
+      <!-- Common Issues -->
+      <h2 id="common-issues">Common Issues</h2>
+
+      <h3>macOS: "ssm-session-client cannot be opened"</h3>
+      <p>macOS Gatekeeper quarantines downloaded binaries. Remove the quarantine flag:</p>
+<pre><code class="language-bash">xattr -d com.apple.quarantine /usr/local/bin/ssm-session-client</code></pre>
+
+      <h3>Windows: SmartScreen warning</h3>
+      <p>
+        Click <strong>More info</strong> → <strong>Run anyway</strong>. The binary is
+        code-signed; SmartScreen may still warn on first run until the binary has sufficient
+        reputation. Running from an Administrator PowerShell session bypasses this.
+      </p>
+
+      <h3>Connection times out / "target not connected"</h3>
+      <ul>
+        <li>Verify the SSM Agent is running on the instance: in the EC2 console, check
+          <em>Systems Manager</em> → <em>Fleet Manager</em> → instance status.</li>
+        <li>Ensure the instance has the required IAM instance profile with the
+          <code>AmazonSSMManagedInstanceCore</code> managed policy.</li>
+        <li>If using VPC endpoints, confirm all four endpoints
+          (<code>ssm</code>, <code>ssmmessages</code>, <code>ec2</code>, <code>sts</code>)
+          are in place and their security groups allow traffic from the instance.</li>
+        <li>Enable debug logging (see above) and check the log file for API error details.</li>
+      </ul>
+
+      <h3>SSO: "no valid SSO token found"</h3>
+      <ul>
+        <li>Ensure <code>sso-login: true</code> is set in your config (or <code>--sso-login</code> flag).</li>
+        <li>If you cannot open a browser, copy the verification URL from the debug log or
+          console and open it on another device.</li>
+        <li>Verify the SSO profile in <code>~/.aws/config</code> has <code>sso_start_url</code>,
+          <code>sso_account_id</code>, <code>sso_role_name</code>, and <code>sso_region</code>.</li>
+      </ul>
+
+      <h3>Target not found</h3>
+      <ul>
+        <li>Confirm the EC2 instance is in a <em>running</em> state.</li>
+        <li>For tag-based lookup, ensure the IAM credentials have <code>ec2:DescribeInstances</code>.</li>
+        <li>For alias lookup, confirm the alias is defined in the config file or
+          passed with <code>--alias</code>.</li>
+      </ul>
+
+    </section>
+
+    <!-- ============================================================
+         CONTRIBUTING
+         ============================================================ -->
+    <section id="contributing">
+      <h1>Contributing</h1>
+      <p>
+        Contributions are welcome! Please open an issue to discuss significant changes
+        before submitting a pull request. All code must pass the lint and unit tests before
+        merging.
+      </p>
+
+      <h2>Prerequisites</h2>
+      <ul>
+        <li><a href="https://golang.org/dl/" target="_blank" rel="noopener">Go</a> (version from <code>go.mod</code>)</li>
+        <li><a href="https://github.com/golangci/golangci-lint" target="_blank" rel="noopener">golangci-lint</a> for linting</li>
+        <li><strong>Acceptance tests only:</strong> An AWS account, and
+          <a href="https://opentofu.org" target="_blank" rel="noopener">OpenTofu</a>
+          (or Terraform) for provisioning test infrastructure</li>
+      </ul>
+
+      <!-- Building -->
+      <h2 id="build">Building from Source</h2>
+<pre><code class="language-bash"># Clone the repository
+git clone https://github.com/alexbacchin/ssm-session-client.git
+cd ssm-session-client
+
+# Build for the current platform
+go build -o ssm-session-client .
+
+# Cross-compile
+GOOS=linux   GOARCH=amd64 go build -o ssm-session-client-linux-amd64 .
+GOOS=darwin  GOARCH=arm64 go build -o ssm-session-client-darwin-arm64 .
+GOOS=windows GOARCH=amd64 go build -o ssm-session-client.exe .</code></pre>
+
+      <!-- Unit Tests -->
+      <h2 id="unit-tests">Unit Tests</h2>
+<pre><code class="language-bash"># Run all unit tests with the race detector and coverage
+go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+# View coverage summary
+go tool cover -func=coverage.out
+
+# Run a single test
+go test ./ssmclient/... -run TestTargetResolver -race</code></pre>
+
+      <!-- Linting -->
+      <h3>Linting</h3>
+<pre><code class="language-bash">golangci-lint run</code></pre>
+      <p>Key lint constraints enforced in this project:</p>
+      <ul>
+        <li>Maximum function length: 75 lines / 50 statements</li>
+        <li>Maximum cognitive/cyclomatic complexity: 15</li>
+        <li>Maximum line length: 132 characters</li>
+        <li>Active linters: <code>errcheck</code>, <code>gosec</code>, <code>funlen</code>,
+          <code>gocognit</code>, <code>gocyclo</code>, <code>revive</code>, <code>bodyclose</code></li>
+      </ul>
+
+      <!-- Acceptance Tests -->
+      <h2 id="acceptance-tests">Acceptance Tests</h2>
+      <p>
+        The acceptance test suite provisions real AWS infrastructure (an EC2 instance with
+        no inbound SSH access), runs end-to-end tests against it, and tears everything down.
+        Tests are tagged <code>acceptance</code> and are excluded from the standard
+        <code>go test ./...</code> run.
+      </p>
+
+      <h3>What the tests cover</h3>
+      <ul>
+        <li>Shell access by instance ID, tag, alias, private IP, and DNS TXT record</li>
+        <li>SSH direct and SSH proxy connections</li>
+        <li>EC2 Instance Connect session</li>
+        <li>Port forwarding (single and multiple concurrent connections)</li>
+        <li>RDP tunnel (Windows runner, optional)</li>
+        <li>SSO login with cached token (optional, requires an SSO profile)</li>
+        <li>Error conditions: invalid target, missing region, session termination</li>
+      </ul>
+
+      <h3>1. Configure AWS credentials</h3>
+      <p>
+        The tests use standard AWS SDK credential chain. For CI, OIDC is recommended.
+        For local runs, use a named profile or environment variables. The IAM principal
+        needs permissions to manage EC2, SSM, IAM roles, and (optionally) Route53, KMS.
+      </p>
+
+      <h3>2. Provision infrastructure</h3>
+<pre><code class="language-bash">cd test/scripts
+make acceptance-prepare AWS_REGION=ap-southeast-2
+
+# Wait for the SSM agent to come online
+make acceptance-wait-ssm AWS_REGION=ap-southeast-2</code></pre>
+
+      <h3>3. Run the tests</h3>
+<pre><code class="language-bash">make acceptance-run-local</code></pre>
+
+      <h3>4. Tear down</h3>
+<pre><code class="language-bash">make acceptance-destroy AWS_REGION=ap-southeast-2</code></pre>
+
+      <h3>Full lifecycle (provision → test → destroy)</h3>
+<pre><code class="language-bash">make acceptance AWS_REGION=ap-southeast-2</code></pre>
+
+      <h3>Interactive SSO test</h3>
+<pre><code class="language-bash"># Requires a human to approve the device code in a browser
+make acceptance-sso-interactive SSO_PROFILE=my-sso-profile</code></pre>
+
+      <h3>Windows / RDP tests</h3>
+<pre><code class="language-bash"># Provision with a Windows instance
+make acceptance-prepare TF_EXTRA_VARS="-var=create_windows_instance=true"
+
+# Run on a Windows runner with the acceptance+windows build tags
+go test ./test/acceptance/... -tags "acceptance windows" -run RDP -v</code></pre>
+
+      <div class="callout callout-info">
+        <strong>CI/CD:</strong> Acceptance tests run automatically on every release tag via
+        <a href="https://github.com/alexbacchin/ssm-session-client/blob/main/.github/workflows/release.yml"
+           target="_blank" rel="noopener">release.yml</a>.
+        They also run nightly via
+        <a href="https://github.com/alexbacchin/ssm-session-client/blob/main/.github/workflows/acceptance.yml"
+           target="_blank" rel="noopener">acceptance.yml</a>.
+        AWS authentication uses GitHub OIDC (no long-lived secrets stored in GitHub).
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <p>
+    <strong style="color:#fff;">SSM Session Client</strong> is open source software licensed under the
+    <a href="https://github.com/alexbacchin/ssm-session-client/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
+  </p>
+  <p>
+    <a href="https://github.com/alexbacchin/ssm-session-client" target="_blank" rel="noopener">GitHub</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/alexbacchin/ssm-session-client/releases" target="_blank" rel="noopener">Releases</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/alexbacchin/ssm-session-client/issues" target="_blank" rel="noopener">Issues</a>
+  </p>
+</footer>
+
+<!-- Prism.js syntax highlighting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js" crossorigin="anonymous"></script>
+<!-- Site JS -->
+<script src="js/main.js"></script>
+</body>
+</html>
