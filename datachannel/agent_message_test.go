@@ -263,8 +263,10 @@ func TestValidateMessage_PayloadDigestMismatch(t *testing.T) {
 	// Corrupt the digest
 	msg.payloadDigest = make([]byte, sha256.Size)
 
-	if err := msg.ValidateMessage(); err == nil {
-		t.Error("expected error for payload digest mismatch")
+	// ValidateMessage logs digest mismatches but doesn't fail
+	// (some SSM agent versions may send incorrect digests)
+	if err := msg.ValidateMessage(); err != nil {
+		t.Errorf("unexpected error for payload digest mismatch: %v", err)
 	}
 }
 
@@ -408,8 +410,10 @@ func TestUnmarshalBinary_CorruptedData(t *testing.T) {
 	}
 
 	decoded := new(AgentMessage)
-	if err := decoded.UnmarshalBinary(corrupted); err == nil {
-		t.Error("expected error for corrupted digest")
+	// UnmarshalBinary succeeds even with corrupted digest
+	// (some SSM agent versions may send incorrect digests)
+	if err := decoded.UnmarshalBinary(corrupted); err != nil {
+		t.Errorf("unexpected error for corrupted digest: %v", err)
 	}
 }
 
