@@ -14,6 +14,12 @@ terraform {
       version = "~> 4.0"
     }
   }
+
+  # Backend config is supplied at init time via -backend-config flags.
+  # Run test/scripts/setup-github-oidc.sh once to create the bucket, then
+  # use the Makefile (acceptance-prepare / acceptance-destroy) which pass
+  # the correct -backend-config arguments automatically.
+  backend "s3" {}
 }
 
 provider "aws" {

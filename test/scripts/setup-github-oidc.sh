@@ -25,11 +25,13 @@ INLINE_POLICY_NAME="acceptance-test-permissions"
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 OIDC_PROVIDER_URL="token.actions.githubusercontent.com"
 OIDC_PROVIDER_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_PROVIDER_URL}"
+STATE_BUCKET="ssm-session-client-tfstate-${AWS_ACCOUNT_ID}-${AWS_REGION}"
 
-echo "==> AWS account : ${AWS_ACCOUNT_ID}"
-echo "==> Region      : ${AWS_REGION}"
-echo "==> GitHub repo : ${GITHUB_ORG}/${GITHUB_REPO}"
-echo "==> Role name   : ${ROLE_NAME}"
+echo "==> AWS account   : ${AWS_ACCOUNT_ID}"
+echo "==> Region        : ${AWS_REGION}"
+echo "==> GitHub repo   : ${GITHUB_ORG}/${GITHUB_REPO}"
+echo "==> Role name     : ${ROLE_NAME}"
+echo "==> TF state bucket: ${STATE_BUCKET}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -50,10 +52,50 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2: IAM Role
+# Step 2: S3 bucket for Terraform state
 # ---------------------------------------------------------------------------
 echo ""
-echo "--- Step 2: IAM role (${ROLE_NAME})"
+echo "--- Step 2: S3 Terraform state bucket (${STATE_BUCKET})"
+
+if aws s3api head-bucket --bucket "${STATE_BUCKET}" 2>/dev/null; then
+  echo "    Already exists: s3://${STATE_BUCKET}"
+else
+  if [ "${AWS_REGION}" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "${STATE_BUCKET}"
+  else
+    aws s3api create-bucket \
+      --bucket "${STATE_BUCKET}" \
+      --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+  fi
+  echo "    Created: s3://${STATE_BUCKET}"
+fi
+
+aws s3api put-bucket-versioning \
+  --bucket "${STATE_BUCKET}" \
+  --versioning-configuration Status=Enabled
+echo "    Versioning: enabled"
+
+aws s3api put-bucket-encryption \
+  --bucket "${STATE_BUCKET}" \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
+      "BucketKeyEnabled": true
+    }]
+  }'
+echo "    Encryption: AES256"
+
+aws s3api put-public-access-block \
+  --bucket "${STATE_BUCKET}" \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+echo "    Public access: blocked"
+
+# ---------------------------------------------------------------------------
+# Step 3: IAM Role
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- Step 3: IAM role (${ROLE_NAME})"
 
 TRUST_POLICY=$(cat <<EOF
 {
@@ -88,10 +130,10 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Inline policy (idempotent — put-role-policy overwrites on re-run)
+# Step 4: Inline policy (idempotent — put-role-policy overwrites on re-run)
 # ---------------------------------------------------------------------------
 echo ""
-echo "--- Step 3: Inline policy (${INLINE_POLICY_NAME})"
+echo "--- Step 4: Inline policy (${INLINE_POLICY_NAME})"
 
 INLINE_POLICY_DOCUMENT=$(cat <<EOF
 {
@@ -137,7 +179,10 @@ INLINE_POLICY_DOCUMENT=$(cat <<EOF
         "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeTags",
-        "ec2:GetPasswordData"
+        "ec2:GetPasswordData",
+        "ec2:DescribeVpcAttribute",
+        "ec2:DescribeInstanceTypes"
+        
       ],
       "Resource": "*"
     },
@@ -222,7 +267,9 @@ INLINE_POLICY_DOCUMENT=$(cat <<EOF
         "kms:TagResource",
         "kms:UntagResource",
         "kms:GenerateDataKey",
-        "kms:Decrypt"
+        "kms:Decrypt",
+        "kms:ListResourceTags"
+
       ],
       "Resource": "*"
     },
@@ -242,6 +289,22 @@ INLINE_POLICY_DOCUMENT=$(cat <<EOF
         "route53:GetChange"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "TerraformStateS3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${STATE_BUCKET}",
+        "arn:aws:s3:::${STATE_BUCKET}/*"
+      ]
     }
   ]
 }
@@ -255,10 +318,10 @@ aws iam put-role-policy \
 echo "    Applied inline policy to ${ROLE_NAME}"
 
 # ---------------------------------------------------------------------------
-# Step 4: Set GitHub Actions secret
+# Step 5: Set GitHub Actions secret
 # ---------------------------------------------------------------------------
 echo ""
-echo "--- Step 4: GitHub Actions secret (AWS_ACCEPTANCE_ROLE_ARN)"
+echo "--- Step 5: GitHub Actions secret (AWS_ACCEPTANCE_ROLE_ARN)"
 
 ROLE_ARN=$(aws iam get-role --role-name "${ROLE_NAME}" --query Role.Arn --output text)
 
@@ -280,4 +343,5 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "==> Setup complete."
-echo "    Role ARN: ${ROLE_ARN}"
+echo "    Role ARN     : ${ROLE_ARN}"
+echo "    State bucket : s3://${STATE_BUCKET}"

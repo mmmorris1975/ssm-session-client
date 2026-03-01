@@ -66,6 +66,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ACCEPTANCE_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set Terraform state bucket
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "TF_STATE_BUCKET=ssm-session-client-tfstate-${ACCOUNT_ID}-${AWS_REGION}" >> "$GITHUB_ENV"
+
       - name: Provision infrastructure
         id: tf_apply
         run: make -f ${{ env.MAKEFILE }} acceptance-prepare AWS_REGION=${{ env.AWS_REGION }}
@@ -126,6 +131,12 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ACCEPTANCE_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Terraform state bucket
+        shell: bash
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "TF_STATE_BUCKET=ssm-session-client-tfstate-${ACCOUNT_ID}-${AWS_REGION}" >> "$GITHUB_ENV"
 
       - name: Provision infrastructure (with Windows instance)
         id: tf_apply_win

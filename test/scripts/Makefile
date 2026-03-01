@@ -10,6 +10,17 @@ SSM_POLL_SECS  ?= 10
 TF_CMD         ?= $(shell command -v tofu 2>/dev/null || echo "terraform")
 TF_EXTRA_VARS  ?=
 
+# S3 backend for Terraform state.
+# TF_STATE_BUCKET can be overridden by setting it in the environment (CI does
+# this via a "Set Terraform state bucket" step after OIDC auth).  Locally it
+# is computed from the current AWS caller identity.
+TF_STATE_BUCKET ?= ssm-session-client-tfstate-$(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)-$(AWS_REGION)
+TF_BACKEND_FLAGS = \
+	-backend-config="bucket=$(TF_STATE_BUCKET)" \
+	-backend-config="key=acceptance/terraform.tfstate" \
+	-backend-config="region=$(AWS_REGION)" \
+	-backend-config="encrypt=true"
+
 SSO_PROFILE        ?=
 SSO_TEST_TIMEOUT   ?= 10
 
@@ -21,7 +32,7 @@ help: ## Show this help message.
 
 acceptance-prepare: ## Provision test infrastructure (requires AWS credentials).
 	cd $(INFRA_DIR) && \
-		$(TF_CMD) init -upgrade && \
+		$(TF_CMD) init -upgrade $(TF_BACKEND_FLAGS) && \
 		$(TF_CMD) apply -auto-approve -var="region=$(AWS_REGION)" $(TF_EXTRA_VARS)
 
 acceptance-wait-ssm: ## Wait for SSM agent to come online on provisioned instances.
@@ -82,6 +93,7 @@ acceptance-sso-interactive: ## Run interactive SSO login test (requires a human 
 
 acceptance-destroy: ## Tear down all test infrastructure (always runs even on failure).
 	cd $(INFRA_DIR) && \
+		$(TF_CMD) init -upgrade $(TF_BACKEND_FLAGS) && \
 		$(TF_CMD) destroy -auto-approve -var="region=$(AWS_REGION)" $(TF_EXTRA_VARS)
 
 acceptance: ## Full lifecycle: provision → wait → test → destroy (destroy runs even on test failure).
