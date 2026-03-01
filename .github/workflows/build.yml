@@ -7,7 +7,7 @@ on:
       - 'releases/**'
       - 'feature/**'
   pull_request:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
 
 jobs:
@@ -34,9 +34,11 @@ jobs:
 
       - name: Run tests
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+        shell: bash
 
       - name: Display coverage
         run: go tool cover -func=coverage.out
+        shell: bash
 
   cross-compile:
     runs-on: ubuntu-latest
