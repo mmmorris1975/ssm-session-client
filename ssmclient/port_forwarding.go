@@ -91,9 +91,12 @@ func startPortForwardingSession(ctx context.Context, c *datachannel.SsmDataChann
 	}
 	defer closeLsnr()
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	go func() {
 		<-ctx.Done()
-		lsnr.Close()
+		closeLsnr()
 	}()
 
 	log.Printf("listening on %s", lsnr.Addr())

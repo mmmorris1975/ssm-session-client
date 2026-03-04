@@ -859,6 +859,10 @@ type AuthorizationRule struct {
 // Describes Availability Zones, Local Zones, and Wavelength Zones.
 type AvailabilityZone struct {
 
+	// The geography information for the Availability Zone or Local Zone. The
+	// geography is returned as a list.
+	Geography []AvailabilityZoneGeography
+
 	// The long name of the Availability Zone group, Local Zone group, or Wavelength
 	// Zone group.
 	GroupLongName *string
@@ -900,6 +904,10 @@ type AvailabilityZone struct {
 	// possible values are available , unavailable , and constrained .
 	State AvailabilityZoneState
 
+	// The sub-geography information for the Availability Zone or Local Zone. The
+	// sub-geography is returned as a list.
+	SubGeography []AvailabilityZoneSubGeography
+
 	// The ID of the Availability Zone, Local Zone, or Wavelength Zone.
 	ZoneId *string
 
@@ -914,11 +922,69 @@ type AvailabilityZone struct {
 	noSmithyDocumentSerde
 }
 
+// For regional NAT gateways only: The configuration specifying which Elastic IP
+// address (EIP) to use for handling outbound NAT traffic from a specific
+// Availability Zone.
+//
+// A regional NAT gateway is a single NAT Gateway that works across multiple
+// availability zones (AZs) in your VPC, providing redundancy, scalability and
+// availability across all the AZs in a Region.
+//
+// For more information, see [Regional NAT gateways for automatic multi-AZ expansion] in the Amazon VPC User Guide.
+//
+// [Regional NAT gateways for automatic multi-AZ expansion]: https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html
+type AvailabilityZoneAddress struct {
+
+	// The allocation IDs of the Elastic IP addresses (EIPs) to be used for handling
+	// outbound NAT traffic in this specific Availability Zone.
+	AllocationIds []string
+
+	// For regional NAT gateways only: The Availability Zone where this specific NAT
+	// gateway configuration will be active. Each AZ in a regional NAT gateway has its
+	// own configuration to handle outbound NAT traffic from that AZ.
+	//
+	// A regional NAT gateway is a single NAT Gateway that works across multiple
+	// availability zones (AZs) in your VPC, providing redundancy, scalability and
+	// availability across all the AZs in a Region.
+	AvailabilityZone *string
+
+	// For regional NAT gateways only: The ID of the Availability Zone where this
+	// specific NAT gateway configuration will be active. Each AZ in a regional NAT
+	// gateway has its own configuration to handle outbound NAT traffic from that AZ.
+	// Use this instead of AvailabilityZone for consistent identification of AZs across
+	// Amazon Web Services Regions.
+	//
+	// A regional NAT gateway is a single NAT Gateway that works across multiple
+	// availability zones (AZs) in your VPC, providing redundancy, scalability and
+	// availability across all the AZs in a Region.
+	AvailabilityZoneId *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes the geography information for an Availability Zone or Local Zone.
+type AvailabilityZoneGeography struct {
+
+	// The name of the geography, for example, United States of America .
+	Name *string
+
+	noSmithyDocumentSerde
+}
+
 // Describes a message about an Availability Zone, Local Zone, or Wavelength Zone.
 type AvailabilityZoneMessage struct {
 
 	// The message about the Availability Zone, Local Zone, or Wavelength Zone.
 	Message *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes the sub-geography information for an Availability Zone or Local Zone.
+type AvailabilityZoneSubGeography struct {
+
+	// The name of the sub-geography, for example, Oregon.
+	Name *string
 
 	noSmithyDocumentSerde
 }
@@ -1154,6 +1220,19 @@ type Byoasn struct {
 // Information about an address range that is provisioned for use with your Amazon
 // Web Services resources through bring your own IP addresses (BYOIP).
 type ByoipCidr struct {
+
+	// Specifies the advertisement method for the BYOIP CIDR. Valid values are:
+	//
+	//   - unicast : IP is advertised from a single location (regional services like
+	//   EC2)
+	//
+	//   - anycast : IP is advertised from multiple global locations simultaneously
+	//   (global services like CloudFront)
+	//
+	// For more information, see [Bring your own IP to CloudFront using IPAM] in the Amazon VPC IPAM User Guide.
+	//
+	// [Bring your own IP to CloudFront using IPAM]: https://docs.aws.amazon.com/vpc/latest/ipam/tutorials-byoip-cloudfront.html
+	AdvertisementType *string
 
 	// The BYOIP CIDR associations with ASNs.
 	AsnAssociations []AsnAssociation
@@ -1399,6 +1478,9 @@ type CapacityBlockExtension struct {
 	// The total price to be paid up front.
 	UpfrontFee *string
 
+	// The type of zone where the Capacity Block extension is located.
+	ZoneType *string
+
 	noSmithyDocumentSerde
 }
 
@@ -1452,6 +1534,9 @@ type CapacityBlockExtensionOffering struct {
 	// The total price of the Capacity Block extension offering, to be paid up front.
 	UpfrontFee *string
 
+	// The type of zone where the Capacity Block extension offering is available.
+	ZoneType *string
+
 	noSmithyDocumentSerde
 }
 
@@ -1500,6 +1585,9 @@ type CapacityBlockOffering struct {
 
 	// The total price to be paid up front.
 	UpfrontFee *string
+
+	// The type of zone where the Capacity Block offering is available.
+	ZoneType *string
 
 	noSmithyDocumentSerde
 }
@@ -1674,7 +1762,7 @@ type CapacityReservation struct {
 	// The Availability Zone in which the capacity is reserved.
 	AvailabilityZone *string
 
-	// The Availability Zone ID of the Capacity Reservation.
+	// The ID of the Availability Zone in which the capacity is reserved.
 	AvailabilityZoneId *string
 
 	// The remaining capacity. Indicates the number of instances that can be launched
@@ -1701,7 +1789,7 @@ type CapacityReservation struct {
 	// Information about your commitment for a future-dated Capacity Reservation.
 	CommitmentInfo *CapacityReservationCommitmentInfo
 
-	// The date and time at which the Capacity Reservation was created.
+	// The date and time the Capacity Reservation was created.
 	CreateDate *time.Time
 
 	// The delivery method for a future-dated Capacity Reservation. incremental
@@ -1717,10 +1805,10 @@ type CapacityReservation struct {
 	// EBS- optimized instance.
 	EbsOptimized *bool
 
-	// The date and time at which the Capacity Reservation expires. When a Capacity
-	// Reservation expires, the reserved capacity is released and you can no longer
-	// launch instances into it. The Capacity Reservation's state changes to expired
-	// when it reaches its end date and time.
+	// The date and time the Capacity Reservation expires. When a Capacity Reservation
+	// expires, the reserved capacity is released and you can no longer launch
+	// instances into it. The Capacity Reservation's state changes to expired when it
+	// reaches its end date and time.
 	EndDate *time.Time
 
 	// Indicates the way in which the Capacity Reservation ends. A Capacity
@@ -1757,6 +1845,19 @@ type CapacityReservation struct {
 	// The type of instance for which the Capacity Reservation reserves capacity.
 	InstanceType *string
 
+	//  Indicates whether this Capacity Reservation is interruptible, meaning
+	// instances may be terminated when the owner reclaims capacity.
+	Interruptible *bool
+
+	//  Contains allocation details for interruptible reservations, including current
+	// allocated instances and target instance counts within the
+	// interruptibleCapacityAllocation object.
+	InterruptibleCapacityAllocation *InterruptibleCapacityAllocation
+
+	//  Information about the interruption configuration and association with the
+	// source reservation for interruptible Capacity Reservations.
+	InterruptionInfo *InterruptionInfo
+
 	// The Amazon Resource Name (ARN) of the Outpost on which the Capacity Reservation
 	// was created.
 	OutpostArn *string
@@ -1774,7 +1875,7 @@ type CapacityReservation struct {
 	// The type of Capacity Reservation.
 	ReservationType CapacityReservationType
 
-	// The date and time at which the Capacity Reservation was started.
+	// The date and time the Capacity Reservation was started.
 	StartDate *time.Time
 
 	// The current state of the Capacity Reservation. A Capacity Reservation can be in
@@ -2192,6 +2293,50 @@ type CapacityReservationTargetResponse struct {
 
 	// The ARN of the targeted Capacity Reservation group.
 	CapacityReservationResourceGroupArn *string
+
+	noSmithyDocumentSerde
+}
+
+// Information about the Capacity Reservation topology.
+type CapacityReservationTopology struct {
+
+	// The name of the Availability Zone or Local Zone that the Capacity Reservation
+	// is in.
+	AvailabilityZone *string
+
+	// The ID of the Availability Zone or Local Zone that the Capacity Reservation is
+	// in.
+	AvailabilityZoneId *string
+
+	// The ID of the Capacity Block. This parameter is only supported for UltraServer
+	// instances and identifies instances within the UltraServer domain.
+	CapacityBlockId *string
+
+	// The ID of the Capacity Reservation.
+	CapacityReservationId *string
+
+	// The name of the placement group that the Capacity Reservation is in.
+	GroupName *string
+
+	// The instance type.
+	InstanceType *string
+
+	// The network nodes. The nodes are hashed based on your account. Capacity
+	// Reservations from different accounts running under the same server will return a
+	// different hashed list of strings.
+	//
+	// The value is null or empty if:
+	//
+	//   - The instance type is not supported.
+	//
+	//   - The Capacity Reservation is in a state other than active or pending .
+	NetworkNodes []string
+
+	// The current state of the Capacity Reservation. For the list of possible states,
+	// see [DescribeCapacityReservations].
+	//
+	// [DescribeCapacityReservations]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeCapacityReservations.html
+	State *string
 
 	noSmithyDocumentSerde
 }
@@ -2781,6 +2926,20 @@ type ClientVpnRouteStatus struct {
 // Options for sending VPN tunnel logs to CloudWatch.
 type CloudWatchLogOptions struct {
 
+	// Indicates whether Border Gateway Protocol (BGP) logging is enabled for the VPN
+	// connection. Default value is False .
+	//
+	// Valid values: True | False
+	BgpLogEnabled *bool
+
+	// The Amazon Resource Name (ARN) of the CloudWatch log group for BGP logs.
+	BgpLogGroupArn *string
+
+	// The output format for BGP logs sent to CloudWatch. Default format is json .
+	//
+	// Valid values: json | text
+	BgpLogOutputFormat *string
+
 	// Status of VPN tunnel logging feature. Default value is False .
 	//
 	// Valid values: True | False
@@ -2799,6 +2958,22 @@ type CloudWatchLogOptions struct {
 
 // Options for sending VPN tunnel logs to CloudWatch.
 type CloudWatchLogOptionsSpecification struct {
+
+	// Specifies whether to enable BGP logging for the VPN connection. Default value
+	// is False .
+	//
+	// Valid values: True | False
+	BgpLogEnabled *bool
+
+	// The Amazon Resource Name (ARN) of the CloudWatch log group where BGP logs will
+	// be sent.
+	BgpLogGroupArn *string
+
+	// The desired output format for BGP logs to be sent to CloudWatch. Default format
+	// is json .
+	//
+	// Valid values: json | text
+	BgpLogOutputFormat *string
 
 	// Enable or disable VPN tunnel logging feature. Default value is False .
 	//
@@ -3079,6 +3254,9 @@ type CpuOptions struct {
 	// The number of CPU cores for the instance.
 	CoreCount *int32
 
+	// Indicates whether the instance is enabled for nested virtualization.
+	NestedVirtualization NestedVirtualizationSpecification
+
 	// The number of threads per CPU core.
 	ThreadsPerCore *int32
 
@@ -3098,6 +3276,12 @@ type CpuOptionsRequest struct {
 
 	// The number of CPU cores for the instance.
 	CoreCount *int32
+
+	// Indicates whether to enable the instance for nested virtualization. Nested
+	// virtualization is supported only on 8th generation Intel-based instance types
+	// (c8i, m8i, r8i, and their flex variants). When nested virtualization is enabled,
+	// Virtual Secure Mode (VSM) is automatically disabled for the instance.
+	NestedVirtualization NestedVirtualizationSpecification
 
 	// The number of threads per CPU core. To disable multithreading for the instance,
 	// specify a value of 1 . Otherwise, specify the default value of 2 .
@@ -3839,6 +4023,9 @@ type DescribeFastSnapshotRestoreSuccessItem struct {
 	// The Availability Zone.
 	AvailabilityZone *string
 
+	// The ID of the Availability Zone.
+	AvailabilityZoneId *string
+
 	// The time at which fast snapshot restores entered the disabled state.
 	DisabledTime *time.Time
 
@@ -4078,6 +4265,9 @@ type DisableFastSnapshotRestoreStateErrorItem struct {
 	// The Availability Zone.
 	AvailabilityZone *string
 
+	// The ID of the Availability Zone.
+	AvailabilityZoneId *string
+
 	// The error.
 	Error *DisableFastSnapshotRestoreStateError
 
@@ -4089,6 +4279,9 @@ type DisableFastSnapshotRestoreSuccessItem struct {
 
 	// The Availability Zone.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone.
+	AvailabilityZoneId *string
 
 	// The time at which fast snapshot restores entered the disabled state.
 	DisabledTime *time.Time
@@ -4250,6 +4443,32 @@ type DnsOptions struct {
 	// Indicates whether to enable private DNS only for inbound endpoints.
 	PrivateDnsOnlyForInboundResolverEndpoint *bool
 
+	//  The preference for which private domains have a private hosted zone created
+	// for and associated with the specified VPC. Only supported when private DNS is
+	// enabled and when the VPC endpoint type is ServiceNetwork or Resource.
+	//
+	//   - ALL_DOMAINS - VPC Lattice provisions private hosted zones for all custom
+	//   domain names.
+	//
+	//   - VERIFIED_DOMAINS_ONLY - VPC Lattice provisions a private hosted zone only if
+	//   custom domain name has been verified by the provider.
+	//
+	//   - VERIFIED_DOMAINS_AND_SPECIFIED_DOMAINS - VPC Lattice provisions private
+	//   hosted zones for all verified custom domain names and other domain names that
+	//   the resource consumer specifies. The resource consumer specifies the domain
+	//   names in the PrivateDnsSpecifiedDomains parameter.
+	//
+	//   - SPECIFIED_DOMAINS_ONLY - VPC Lattice provisions a private hosted zone for
+	//   domain names specified by the resource consumer. The resource consumer specifies
+	//   the domain names in the PrivateDnsSpecifiedDomains parameter.
+	PrivateDnsPreference *string
+
+	//  Indicates which of the private domains to create private hosted zones for and
+	// associate with the specified VPC. Only supported when private DNS is enabled and
+	// the private DNS preference is VERIFIED_DOMAINS_AND_SPECIFIED_DOMAINS or
+	// SPECIFIED_DOMAINS_ONLY .
+	PrivateDnsSpecifiedDomains []string
+
 	noSmithyDocumentSerde
 }
 
@@ -4264,6 +4483,32 @@ type DnsOptionsSpecification struct {
 	// endpoints. It routes traffic that originates from the VPC to the gateway
 	// endpoint and traffic that originates from on-premises to the interface endpoint.
 	PrivateDnsOnlyForInboundResolverEndpoint *bool
+
+	//  The preference for which private domains have a private hosted zone created
+	// for and associated with the specified VPC. Only supported when private DNS is
+	// enabled and when the VPC endpoint type is ServiceNetwork or Resource.
+	//
+	//   - ALL_DOMAINS - VPC Lattice provisions private hosted zones for all custom
+	//   domain names.
+	//
+	//   - VERIFIED_DOMAINS_ONLY - VPC Lattice provisions a private hosted zone only if
+	//   custom domain name has been verified by the provider.
+	//
+	//   - VERIFIED_DOMAINS_AND_SPECIFIED_DOMAINS - VPC Lattice provisions private
+	//   hosted zones for all verified custom domain names and other domain names that
+	//   the resource consumer specifies. The resource consumer specifies the domain
+	//   names in the PrivateDnsSpecifiedDomains parameter.
+	//
+	//   - SPECIFIED_DOMAINS_ONLY - VPC Lattice provisions a private hosted zone for
+	//   domain names specified by the resource consumer. The resource consumer specifies
+	//   the domain names in the PrivateDnsSpecifiedDomains parameter.
+	PrivateDnsPreference *string
+
+	//  Indicates which of the private domains to create private hosted zones for and
+	// associate with the specified VPC. Only supported when private DNS is enabled and
+	// the private DNS preference is verified-domains-and-specified-domains or
+	// specified-domains-only.
+	PrivateDnsSpecifiedDomains []string
 
 	noSmithyDocumentSerde
 }
@@ -4325,6 +4570,10 @@ type EbsBlockDevice struct {
 	//
 	// [Preserving Amazon EBS volumes on instance termination]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/terminating-instances.html#preserving-volumes-on-termination
 	DeleteOnTermination *bool
+
+	// The index of the EBS card. Some instance types support multiple EBS cards. The
+	// default EBS card index is 0.
+	EbsCardIndex *int32
 
 	// Indicates whether the encryption state of an EBS volume is changed while being
 	// restored from a backing snapshot. The effect of setting the encryption state to
@@ -4508,6 +4757,33 @@ type EbsBlockDeviceResponse struct {
 	noSmithyDocumentSerde
 }
 
+// Describes the performance characteristics of an EBS card on the instance type.
+type EbsCardInfo struct {
+
+	// The baseline bandwidth performance for the EBS card, in Mbps.
+	BaselineBandwidthInMbps *int32
+
+	// The baseline IOPS performance for the EBS card.
+	BaselineIops *int32
+
+	// The baseline throughput performance for the EBS card, in MBps.
+	BaselineThroughputInMBps *float64
+
+	// The index of the EBS card.
+	EbsCardIndex *int32
+
+	// The maximum bandwidth performance for the EBS card, in Mbps.
+	MaximumBandwidthInMbps *int32
+
+	// The maximum IOPS performance for the EBS card.
+	MaximumIops *int32
+
+	// The maximum throughput performance for the EBS card, in MBps.
+	MaximumThroughputInMBps *float64
+
+	noSmithyDocumentSerde
+}
+
 // Describes the Amazon EBS features supported by the instance type.
 type EbsInfo struct {
 
@@ -4516,6 +4792,9 @@ type EbsInfo struct {
 	//
 	// [Amazon EBS volume limits for Amazon EC2 instances]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html
 	AttachmentLimitType AttachmentLimitType
+
+	// Describes the EBS cards available for the instance type.
+	EbsCards []EbsCardInfo
 
 	// Describes the optimized EBS performance for the instance type.
 	EbsOptimizedInfo *EbsOptimizedInfo
@@ -4535,6 +4814,9 @@ type EbsInfo struct {
 	// [Amazon EBS volume limits for Amazon EC2 instances]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html
 	MaximumEbsAttachments *int32
 
+	// Indicates the number of EBS cards supported by the instance type.
+	MaximumEbsCards *int32
+
 	// Indicates whether non-volatile memory express (NVMe) is supported.
 	NvmeSupport EbsNvmeSupport
 
@@ -4553,6 +4835,10 @@ type EbsInstanceBlockDevice struct {
 
 	// Indicates whether the volume is deleted on instance termination.
 	DeleteOnTermination *bool
+
+	// The index of the EBS card. Some instance types support multiple EBS cards. The
+	// default EBS card index is 0.
+	EbsCardIndex *int32
 
 	// The service provider that manages the EBS volume.
 	Operator *OperatorResponse
@@ -4643,6 +4929,9 @@ type Ec2InstanceConnectEndpoint struct {
 
 	// The Availability Zone of the EC2 Instance Connect Endpoint.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone of the EC2 Instance Connect Endpoint.
+	AvailabilityZoneId *string
 
 	// The date and time that the EC2 Instance Connect Endpoint was created.
 	CreatedAt *time.Time
@@ -4894,6 +5183,9 @@ type EnableFastSnapshotRestoreStateErrorItem struct {
 	// The Availability Zone.
 	AvailabilityZone *string
 
+	// The ID of the Availability Zone.
+	AvailabilityZoneId *string
+
 	// The error.
 	Error *EnableFastSnapshotRestoreStateError
 
@@ -4905,6 +5197,9 @@ type EnableFastSnapshotRestoreSuccessItem struct {
 
 	// The Availability Zone.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone.
+	AvailabilityZoneId *string
 
 	// The time at which fast snapshot restores entered the disabled state.
 	DisabledTime *time.Time
@@ -5032,6 +5327,18 @@ type EnclaveOptionsRequest struct {
 	// To enable the instance for Amazon Web Services Nitro Enclaves, set this
 	// parameter to true .
 	Enabled *bool
+
+	noSmithyDocumentSerde
+}
+
+// Describes the encryption support status for a transit gateway.
+type EncryptionSupport struct {
+
+	// The current encryption state of the resource.
+	EncryptionState EncryptionStateValue
+
+	// A message describing the encryption state.
+	StateMessage *string
 
 	noSmithyDocumentSerde
 }
@@ -5438,6 +5745,26 @@ type ExportToS3TaskSpecification struct {
 	// The image is written to a single object in the Amazon S3 bucket at the S3 key
 	// s3prefix + exportTaskId + '.' + diskImageFormat.
 	S3Prefix *string
+
+	noSmithyDocumentSerde
+}
+
+// The configuration that links an Amazon VPC IPAM scope to an external authority
+// system. It specifies the type of external system and the external resource
+// identifier that identifies your account or instance in that system.
+//
+// For more information, see [Integrate VPC IPAM with Infoblox infrastructure] in the Amazon VPC IPAM User Guide.
+//
+// [Integrate VPC IPAM with Infoblox infrastructure]: https://docs.aws.amazon.com/vpc/latest/ipam/integrate-infoblox-ipam.html
+type ExternalAuthorityConfiguration struct {
+
+	// The identifier for the external resource managing this scope. For Infoblox
+	// integrations, this is the Infoblox resource identifier in the format
+	// .identity.account.. .
+	ExternalResourceIdentifier *string
+
+	// The type of external authority.
+	Type IpamScopeExternalAuthorityType
 
 	noSmithyDocumentSerde
 }
@@ -6012,8 +6339,18 @@ type FleetLaunchTemplateConfigRequest struct {
 // Describes overrides for a launch template.
 type FleetLaunchTemplateOverrides struct {
 
-	// The Availability Zone in which to launch the instances.
+	// The Availability Zone in which to launch the instances. For example, us-east-2a .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone in which to launch the instances. For example,
+	// use2-az1 .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
+	AvailabilityZoneId *string
 
 	// The block device mappings, which define the EBS volumes and instance store
 	// volumes to attach to the instance at launch.
@@ -6127,8 +6464,18 @@ type FleetLaunchTemplateOverrides struct {
 // Describes overrides for a launch template.
 type FleetLaunchTemplateOverridesRequest struct {
 
-	// The Availability Zone in which to launch the instances.
+	// The Availability Zone in which to launch the instances. For example, us-east-2a .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone in which to launch the instances. For example,
+	// use2-az1 .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
+	AvailabilityZoneId *string
 
 	// The block device mappings, which define the EBS volumes and instance store
 	// volumes to attach to the instance at launch.
@@ -6604,6 +6951,13 @@ type GpuDeviceInfo struct {
 	// The number of GPUs for the instance type.
 	Count *int32
 
+	// The size of each GPU as a fraction of a full GPU, between 0 (excluded) and 1
+	// (included).
+	GpuPartitionSize *float64
+
+	// Total number of GPU devices of this type.
+	LogicalGpuCount *int32
+
 	// The manufacturer of the GPU accelerator.
 	Manufacturer *string
 
@@ -6612,6 +6966,9 @@ type GpuDeviceInfo struct {
 
 	// The name of the GPU accelerator.
 	Name *string
+
+	// A list of workload types this GPU supports.
+	Workloads []string
 
 	noSmithyDocumentSerde
 }
@@ -7187,6 +7544,29 @@ type Image struct {
 
 	// The type of virtualization of the AMI.
 	VirtualizationType VirtualizationType
+
+	noSmithyDocumentSerde
+}
+
+// Information about a single AMI in the ancestry chain and its source (parent)
+// AMI.
+type ImageAncestryEntry struct {
+
+	// The date and time when this AMI was created.
+	CreationDate *time.Time
+
+	// The ID of this AMI.
+	ImageId *string
+
+	// The owner alias ( amazon | aws-backup-vault | aws-marketplace ) of this AMI, if
+	// one is assigned. Otherwise, the value is null .
+	ImageOwnerAlias *string
+
+	// The ID of the parent AMI.
+	SourceImageId *string
+
+	// The Amazon Web Services Region of the parent AMI.
+	SourceImageRegion *string
 
 	noSmithyDocumentSerde
 }
@@ -8045,6 +8425,9 @@ type Instance struct {
 	// instance store volume.
 	RootDeviceType DeviceType
 
+	// The secondary interfaces for the instance.
+	SecondaryInterfaces []InstanceSecondaryInterface
+
 	// The security groups for the instance.
 	SecurityGroups []GroupIdentifier
 
@@ -8569,10 +8952,15 @@ type InstanceMetadataDefaultsResponse struct {
 	//   must use IMDSv2.
 	HttpTokens HttpTokensState
 
+	// Indicates whether to enforce the requirement of IMDSv2 on an instance at the
+	// time of launch. When enforcement is enabled, the instance can't launch unless
+	// IMDSv2 ( HttpTokens ) is set to required .
+	HttpTokensEnforced HttpTokensEnforcedState
+
 	// Indicates whether access to instance tags from the instance metadata is enabled
-	// or disabled. For more information, see [Work with instance tags using the instance metadata]in the Amazon EC2 User Guide.
+	// or disabled. For more information, see [View tags for your EC2 instances using instance metadata]in the Amazon EC2 User Guide.
 	//
-	// [Work with instance tags using the instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS
+	// [View tags for your EC2 instances using instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/work-with-tags-in-IMDS.html
 	InstanceMetadataTags InstanceMetadataTagsState
 
 	// The entity that manages the IMDS default settings. Possible values include:
@@ -8635,11 +9023,11 @@ type InstanceMetadataOptionsRequest struct {
 
 	// Set to enabled to allow access to instance tags from the instance metadata. Set
 	// to disabled to turn off access to instance tags from the instance metadata. For
-	// more information, see [Work with instance tags using the instance metadata].
+	// more information, see [View tags for your EC2 instances using instance metadata].
 	//
 	// Default: disabled
 	//
-	// [Work with instance tags using the instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS
+	// [View tags for your EC2 instances using instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/work-with-tags-in-IMDS.html
 	InstanceMetadataTags InstanceMetadataTagsState
 
 	noSmithyDocumentSerde
@@ -8675,9 +9063,9 @@ type InstanceMetadataOptionsResponse struct {
 	HttpTokens HttpTokensState
 
 	// Indicates whether access to instance tags from the instance metadata is enabled
-	// or disabled. For more information, see [Work with instance tags using the instance metadata].
+	// or disabled. For more information, see [View tags for your EC2 instances using instance metadata].
 	//
-	// [Work with instance tags using the instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#work-with-tags-in-IMDS
+	// [View tags for your EC2 instances using instance metadata]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/work-with-tags-in-IMDS.html
 	InstanceMetadataTags InstanceMetadataTagsState
 
 	// The state of the metadata option changes.
@@ -9102,17 +9490,34 @@ type InstanceRequirements struct {
 	//   - For instance types with Amazon Web Services Inferentia chips, specify
 	//   inferentia .
 	//
+	//   - For instance types with Amazon Web Services Inferentia2 chips, specify
+	//   inferentia2 .
+	//
+	//   - For instance types with Habana Gaudi HL-205 GPUs, specify gaudi-hl-205 .
+	//
 	//   - For instance types with NVIDIA GRID K520 GPUs, specify k520 .
 	//
 	//   - For instance types with NVIDIA K80 GPUs, specify k80 .
+	//
+	//   - For instance types with NVIDIA L4 GPUs, specify l4 .
+	//
+	//   - For instance types with NVIDIA L40S GPUs, specify l40s .
 	//
 	//   - For instance types with NVIDIA M60 GPUs, specify m60 .
 	//
 	//   - For instance types with AMD Radeon Pro V520 GPUs, specify radeon-pro-v520 .
 	//
+	//   - For instance types with Amazon Web Services Trainium chips, specify trainium
+	//   .
+	//
+	//   - For instance types with Amazon Web Services Trainium2 chips, specify
+	//   trainium2 .
+	//
 	//   - For instance types with NVIDIA T4 GPUs, specify t4 .
 	//
 	//   - For instance types with NVIDIA T4G GPUs, specify t4g .
+	//
+	//   - For instance types with Xilinx U30 cards, specify u30 .
 	//
 	//   - For instance types with Xilinx VU9P FPGAs, specify vu9p .
 	//
@@ -9133,6 +9538,8 @@ type InstanceRequirements struct {
 	//   - For instance types with GPU accelerators, specify gpu .
 	//
 	//   - For instance types with Inference accelerators, specify inference .
+	//
+	//   - For instance types with Media accelerators, specify media .
 	//
 	// Default: Any accelerator type
 	AcceleratorTypes []AcceleratorType
@@ -9338,6 +9745,15 @@ type InstanceRequirements struct {
 	// [GetInstanceTypesFromInstanceRequirements]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetInstanceTypesFromInstanceRequirements.html
 	OnDemandMaxPricePercentageOverLowestPrice *int32
 
+	// Specifies whether instance types must support encrypting in-transit traffic
+	// between instances. For more information, including the supported instance types,
+	// see [Encryption in transit]in the Amazon EC2 User Guide.
+	//
+	// Default: false
+	//
+	// [Encryption in transit]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/data-protection.html#encryption-transit
+	RequireEncryptionInTransit *bool
+
 	// Indicates whether instance types must support hibernation for On-Demand
 	// Instances.
 	//
@@ -9473,17 +9889,34 @@ type InstanceRequirementsRequest struct {
 	//   - For instance types with Amazon Web Services Inferentia chips, specify
 	//   inferentia .
 	//
+	//   - For instance types with Amazon Web Services Inferentia2 chips, specify
+	//   inferentia2 .
+	//
+	//   - For instance types with Habana Gaudi HL-205 GPUs, specify gaudi-hl-205 .
+	//
 	//   - For instance types with NVIDIA GRID K520 GPUs, specify k520 .
 	//
 	//   - For instance types with NVIDIA K80 GPUs, specify k80 .
+	//
+	//   - For instance types with NVIDIA L4 GPUs, specify l4 .
+	//
+	//   - For instance types with NVIDIA L40S GPUs, specify l40s .
 	//
 	//   - For instance types with NVIDIA M60 GPUs, specify m60 .
 	//
 	//   - For instance types with AMD Radeon Pro V520 GPUs, specify radeon-pro-v520 .
 	//
+	//   - For instance types with Amazon Web Services Trainium chips, specify trainium
+	//   .
+	//
+	//   - For instance types with Amazon Web Services Trainium2 chips, specify
+	//   trainium2 .
+	//
 	//   - For instance types with NVIDIA T4 GPUs, specify t4 .
 	//
 	//   - For instance types with NVIDIA T4G GPUs, specify t4g .
+	//
+	//   - For instance types with Xilinx U30 cards, specify u30 .
 	//
 	//   - For instance types with Xilinx VU9P FPGAs, specify vu9p .
 	//
@@ -9504,6 +9937,8 @@ type InstanceRequirementsRequest struct {
 	//   - For instance types with GPU accelerators, specify gpu .
 	//
 	//   - For instance types with Inference accelerators, specify inference .
+	//
+	//   - For instance types with Media accelerators, specify media .
 	//
 	// Default: Any accelerator type
 	AcceleratorTypes []AcceleratorType
@@ -9708,6 +10143,15 @@ type InstanceRequirementsRequest struct {
 	// [GetInstanceTypesFromInstanceRequirements]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetInstanceTypesFromInstanceRequirements.html
 	OnDemandMaxPricePercentageOverLowestPrice *int32
 
+	// Specifies whether instance types must support encrypting in-transit traffic
+	// between instances. For more information, including the supported instance types,
+	// see [Encryption in transit]in the Amazon EC2 User Guide.
+	//
+	// Default: false
+	//
+	// [Encryption in transit]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/data-protection.html#encryption-transit
+	RequireEncryptionInTransit *bool
+
 	// Indicates whether instance types must support hibernation for On-Demand
 	// Instances.
 	//
@@ -9775,6 +10219,120 @@ type InstanceRequirementsWithMetadataRequest struct {
 
 	// The virtualization type.
 	VirtualizationTypes []VirtualizationType
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary interface attached to an instance.
+type InstanceSecondaryInterface struct {
+
+	// The attachment information for the secondary interface.
+	Attachment *InstanceSecondaryInterfaceAttachment
+
+	// The type of secondary interface.
+	InterfaceType SecondaryInterfaceType
+
+	// The MAC address of the secondary interface.
+	MacAddress *string
+
+	// The Amazon Web Services account ID of the owner of the secondary interface.
+	OwnerId *string
+
+	// The private IPv4 addresses associated with the secondary interface.
+	PrivateIpAddresses []InstanceSecondaryInterfacePrivateIpAddress
+
+	// The ID of the secondary interface.
+	SecondaryInterfaceId *string
+
+	// The ID of the secondary network.
+	SecondaryNetworkId *string
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
+
+	// Indicates whether source/destination checking is enabled.
+	SourceDestCheck *bool
+
+	// The status of the secondary interface.
+	Status SecondaryInterfaceStatus
+
+	noSmithyDocumentSerde
+}
+
+// Describes the attachment of a secondary interface to an instance.
+type InstanceSecondaryInterfaceAttachment struct {
+
+	// The timestamp when the attachment was created.
+	AttachTime *time.Time
+
+	// The ID of the attachment.
+	AttachmentId *string
+
+	// Indicates whether the secondary interface is deleted when the instance is
+	// terminated.
+	//
+	// The only supported value for this field is true .
+	DeleteOnTermination *bool
+
+	// The device index of the secondary interface.
+	DeviceIndex *int32
+
+	// The index of the network card.
+	NetworkCardIndex *int32
+
+	// The attachment state.
+	Status AttachmentStatus
+
+	noSmithyDocumentSerde
+}
+
+// Describes a private IPv4 address for a secondary interface.
+type InstanceSecondaryInterfacePrivateIpAddress struct {
+
+	// The private IPv4 address.
+	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a private IPv4 address for a secondary interface request.
+type InstanceSecondaryInterfacePrivateIpAddressRequest struct {
+
+	// The private IPv4 address.
+	//
+	// This member is required.
+	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary interface specification for launching an instance.
+type InstanceSecondaryInterfaceSpecificationRequest struct {
+
+	// Indicates whether the secondary interface is deleted when the instance is
+	// terminated.
+	//
+	// The only supported value for this field is true .
+	DeleteOnTermination *bool
+
+	// The device index for the secondary interface attachment.
+	DeviceIndex *int32
+
+	// The type of secondary interface.
+	InterfaceType SecondaryInterfaceType
+
+	// The index of the network card. The network card must support secondary
+	// interfaces.
+	NetworkCardIndex *int32
+
+	// The number of private IPv4 addresses to assign to the secondary interface.
+	PrivateIpAddressCount *int32
+
+	// The private IPv4 addresses to assign to the secondary interface.
+	PrivateIpAddresses []InstanceSecondaryInterfacePrivateIpAddressRequest
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
 
 	noSmithyDocumentSerde
 }
@@ -9987,8 +10545,8 @@ type InstanceTopology struct {
 	// The name of the Availability Zone or Local Zone that the instance is in.
 	AvailabilityZone *string
 
-	// The ID of the Capacity Block. This parameter is only supported for Ultraserver
-	// instances and identifies instances within the Ultraserver domain.
+	// The ID of the Capacity Block. This parameter is only supported for UltraServer
+	// instances and identifies instances within the UltraServer domain.
 	CapacityBlockId *string
 
 	// The name of the placement group that the instance is in.
@@ -10003,6 +10561,12 @@ type InstanceTopology struct {
 	// The network nodes. The nodes are hashed based on your account. Instances from
 	// different accounts running under the same server will return a different hashed
 	// list of strings.
+	//
+	// The value is null or empty if:
+	//
+	//   - The instance type is not supported.
+	//
+	//   - The instance is in a state other than running .
 	NetworkNodes []string
 
 	// The ID of the Availability Zone or Local Zone that the instance is in.
@@ -10203,6 +10767,48 @@ type InternetGatewayAttachment struct {
 
 	// The ID of the VPC.
 	VpcId *string
+
+	noSmithyDocumentSerde
+}
+
+//	Represents the allocation of capacity from a source reservation to an
+//
+// interruptible reservation, tracking current and target instance counts for
+// allocation management.
+type InterruptibleCapacityAllocation struct {
+
+	//  The current number of instances allocated to the interruptible reservation.
+	InstanceCount *int32
+
+	//  The ID of the interruptible Capacity Reservation created from the allocation.
+	InterruptibleCapacityReservationId *string
+
+	//  The type of interruption policy applied to the interruptible reservation.
+	InterruptionType InterruptionType
+
+	//  The current status of the allocation (updating during reclamation, active when
+	// complete).
+	Status InterruptibleCapacityReservationAllocationStatus
+
+	//  After your modify request, the requested number of instances allocated to
+	// interruptible reservation.
+	TargetInstanceCount *int32
+
+	noSmithyDocumentSerde
+}
+
+//	Contains information about how and when instances in an interruptible
+//
+// reservation can be terminated when capacity is reclaimed.
+type InterruptionInfo struct {
+
+	//  The interruption type that determines how instances are terminated when
+	// capacity is reclaimed.
+	InterruptionType InterruptionType
+
+	//  The ID of the source Capacity Reservation from which the interruptible
+	// reservation was created.
+	SourceCapacityReservationId *string
 
 	noSmithyDocumentSerde
 }
@@ -10641,6 +11247,116 @@ type IpamOrganizationalUnitExclusion struct {
 	noSmithyDocumentSerde
 }
 
+// Information about an IPAM policy.
+//
+// An IPAM policy is a set of rules that define how public IPv4 addresses from
+// IPAM pools are allocated to Amazon Web Services resources. Each rule maps an
+// Amazon Web Services service to IPAM pools that the service will use to get IP
+// addresses. A single policy can have multiple rules and be applied to multiple
+// Amazon Web Services Regions. If the IPAM pool run out of addresses then the
+// services fallback to Amazon-provided IP addresses. A policy can be applied to an
+// individual Amazon Web Services account or an entity within Amazon Web Services
+// Organizations.
+type IpamPolicy struct {
+
+	// The ID of the IPAM this policy belongs to.
+	IpamId *string
+
+	// The Amazon Resource Name (ARN) of the IPAM policy.
+	IpamPolicyArn *string
+
+	// The ID of the IPAM policy.
+	IpamPolicyId *string
+
+	// The Region of the IPAM policy.
+	IpamPolicyRegion *string
+
+	// The account ID that owns the IPAM policy.
+	OwnerId *string
+
+	// The state of the IPAM policy.
+	State IpamPolicyState
+
+	// A message about the state of the IPAM policy.
+	StateMessage *string
+
+	// The tags assigned to the IPAM policy.
+	Tags []Tag
+
+	noSmithyDocumentSerde
+}
+
+// Information about an IPAM policy allocation rule.
+//
+// Allocation rules are optional configurations within an IPAM policy that map
+// Amazon Web Services resource types to specific IPAM pools. If no rules are
+// defined, the resource types default to using Amazon-provided IP addresses.
+type IpamPolicyAllocationRule struct {
+
+	// The ID of the source IPAM pool for the allocation rule.
+	//
+	// An IPAM pool is a collection of IP addresses in IPAM that can be allocated to
+	// Amazon Web Services resources.
+	SourceIpamPoolId *string
+
+	noSmithyDocumentSerde
+}
+
+// Information about a requested IPAM policy allocation rule.
+//
+// Allocation rules are optional configurations within an IPAM policy that map
+// Amazon Web Services resource types to specific IPAM pools. If no rules are
+// defined, the resource types default to using Amazon-provided IP addresses.
+type IpamPolicyAllocationRuleRequest struct {
+
+	// The ID of the source IPAM pool for the requested allocation rule.
+	//
+	// An IPAM pool is a collection of IP addresses in IPAM that can be allocated to
+	// Amazon Web Services resources.
+	SourceIpamPoolId *string
+
+	noSmithyDocumentSerde
+}
+
+// Information about an IPAM policy.
+type IpamPolicyDocument struct {
+
+	// The allocation rules in the IPAM policy document.
+	//
+	// Allocation rules are optional configurations within an IPAM policy that map
+	// Amazon Web Services resource types to specific IPAM pools. If no rules are
+	// defined, the resource types default to using Amazon-provided IP addresses.
+	AllocationRules []IpamPolicyAllocationRule
+
+	// The ID of the IPAM policy.
+	IpamPolicyId *string
+
+	// The locale of the IPAM policy document.
+	Locale *string
+
+	// The resource type of the IPAM policy document.
+	//
+	// The Amazon Web Services service or resource type that can use IP addresses
+	// through IPAM policies. Supported services and resource types include:
+	//
+	//   - Elastic IP addresses
+	ResourceType IpamPolicyResourceType
+
+	noSmithyDocumentSerde
+}
+
+// The Amazon Web Services Organizations target for an IPAM policy.
+type IpamPolicyOrganizationTarget struct {
+
+	// The ID of the Amazon Web Services Organizations target.
+	//
+	// A target can be an individual Amazon Web Services account or an entity within
+	// an Amazon Web Services Organization to which an IPAM policy can be applied.
+	OrganizationTargetId *string
+
+	noSmithyDocumentSerde
+}
+
 // In IPAM, a pool is a collection of contiguous IP addresses CIDRs. Pools enable
 // you to organize your IP addresses according to your routing and security needs.
 // For example, if you have separate routing and security needs for development and
@@ -10881,6 +11597,479 @@ type IpamPoolSourceResourceRequest struct {
 
 	// The source resource type.
 	ResourceType IpamPoolSourceResourceType
+
+	noSmithyDocumentSerde
+}
+
+// Describes an IPAM prefix list resolver.
+//
+// An IPAM prefix list resolver is a component that manages the synchronization
+// between IPAM's CIDR selection rules and customer-managed prefix lists. It
+// automates connectivity configurations by selecting CIDRs from IPAM's database
+// based on your business logic and synchronizing them with prefix lists used in
+// resources such as VPC route tables and security groups.
+type IpamPrefixListResolver struct {
+
+	// The address family (IPv4 or IPv6) for the IPAM prefix list resolver.
+	AddressFamily AddressFamily
+
+	// The description of the IPAM prefix list resolver.
+	Description *string
+
+	// The Amazon Resource Name (ARN) of the IPAM associated with this resolver.
+	IpamArn *string
+
+	// The Amazon Resource Name (ARN) of the IPAM prefix list resolver.
+	IpamPrefixListResolverArn *string
+
+	// The ID of the IPAM prefix list resolver.
+	IpamPrefixListResolverId *string
+
+	// The Amazon Web Services Region where the associated IPAM is located.
+	IpamRegion *string
+
+	// The status for the last time a version was created.
+	//
+	// Each version is a snapshot of what CIDRs matched your rules at that moment in
+	// time. The version number increments every time the CIDR list changes due to
+	// infrastructure changes.
+	LastVersionCreationStatus IpamPrefixListResolverVersionCreationStatus
+
+	// The status message for the last time a version was created.
+	//
+	// Each version is a snapshot of what CIDRs matched your rules at that moment in
+	// time. The version number increments every time the CIDR list changes due to
+	// infrastructure changes.
+	LastVersionCreationStatusMessage *string
+
+	// The ID of the Amazon Web Services account that owns the IPAM prefix list
+	// resolver.
+	OwnerId *string
+
+	// The current state of the IPAM prefix list resolver. Valid values include
+	// create-in-progress , create-complete , create-failed , modify-in-progress ,
+	// modify-complete , modify-failed , delete-in-progress , delete-complete , and
+	// delete-failed .
+	State IpamPrefixListResolverState
+
+	// The tags assigned to the IPAM prefix list resolver.
+	Tags []Tag
+
+	noSmithyDocumentSerde
+}
+
+// Describes a CIDR selection rule.
+//
+// CIDR selection rules define the business logic for selecting CIDRs from IPAM.
+// If a CIDR matches any of the rules, it will be included. If a rule has multiple
+// conditions, the CIDR has to match every condition of that rule. You can create a
+// prefix list resolver without any CIDR selection rules, but it will generate
+// empty versions (containing no CIDRs) until you add rules.
+type IpamPrefixListResolverRule struct {
+
+	// The conditions that determine which CIDRs are selected by this rule. Conditions
+	// specify criteria such as resource type, tags, account IDs, and Regions.
+	Conditions []IpamPrefixListResolverRuleCondition
+
+	// The ID of the IPAM scope from which to select CIDRs. This determines whether to
+	// select from public or private IP address space.
+	IpamScopeId *string
+
+	// For rules of type ipam-resource-cidr , this is the resource type.
+	ResourceType IpamResourceType
+
+	// The type of CIDR selection rule. Valid values include include for selecting
+	// CIDRs that match the conditions, and exclude for excluding CIDRs that match the
+	// conditions.
+	RuleType IpamPrefixListResolverRuleType
+
+	// A fixed list of CIDRs that do not change (like a manual list replicated across
+	// Regions).
+	StaticCidr *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a condition within a CIDR selection rule. Conditions define the
+// criteria for selecting CIDRs from IPAM's database based on resource attributes.
+//
+// CIDR selection rules define the business logic for selecting CIDRs from IPAM.
+// If a CIDR matches any of the rules, it will be included. If a rule has multiple
+// conditions, the CIDR has to match every condition of that rule. You can create a
+// prefix list resolver without any CIDR selection rules, but it will generate
+// empty versions (containing no CIDRs) until you add rules.
+//
+// There are three rule types. Only 2 of the 3 rule types support conditions -
+// IPAM pool CIDR and Scope resource CIDR. Static CIDR rules cannot have
+// conditions.
+//
+//   - Static CIDR: A fixed list of CIDRs that do not change (like a manual list
+//     replicated across Regions)
+//
+//   - IPAM pool CIDR: CIDRs from specific IPAM pools (like all CIDRs from your
+//     IPAM production pool)
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Conditions:
+//
+//   - Property
+//
+//   - IPAM pool ID: Select an IPAM pool that contains the resources
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+//
+//   - Scope resource CIDR: CIDRs from Amazon Web Services resources like VPCs,
+//     subnets, EIPs within an IPAM scope
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Resource type: Select a resource, like a VPC or subnet.
+//
+//   - Conditions:
+//
+//   - Property:
+//
+//   - Resource ID: The unique ID of a resource (like vpc-1234567890abcdef0)
+//
+//   - Resource owner (like 111122223333)
+//
+//   - Resource region (like us-east-1)
+//
+//   - Resource tag (like key: name, value: dev-vpc-1)
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+type IpamPrefixListResolverRuleCondition struct {
+
+	// A CIDR block to match against. This condition selects CIDRs that fall within or
+	// match the specified CIDR range.
+	Cidr *string
+
+	// The ID of the IPAM pool to match against. This condition selects CIDRs that
+	// belong to the specified IPAM pool.
+	IpamPoolId *string
+
+	// The operation to perform when evaluating this condition. Valid values include
+	// equals , not-equals , contains , and not-contains .
+	Operation IpamPrefixListResolverRuleConditionOperation
+
+	// The ID of the Amazon Web Services resource to match against. This condition
+	// selects CIDRs associated with the specified resource.
+	ResourceId *string
+
+	// The Amazon Web Services account ID that owns the resources to match against.
+	// This condition selects CIDRs from resources owned by the specified account.
+	ResourceOwner *string
+
+	// The Amazon Web Services Region where the resources are located. This condition
+	// selects CIDRs from resources in the specified Region.
+	ResourceRegion *string
+
+	// A tag key-value pair to match against. This condition selects CIDRs from
+	// resources that have the specified tag.
+	ResourceTag *IpamResourceTag
+
+	noSmithyDocumentSerde
+}
+
+// Describes a condition used when creating or modifying resolver rules.
+//
+// CIDR selection rules define the business logic for selecting CIDRs from IPAM.
+// If a CIDR matches any of the rules, it will be included. If a rule has multiple
+// conditions, the CIDR has to match every condition of that rule. You can create a
+// prefix list resolver without any CIDR selection rules, but it will generate
+// empty versions (containing no CIDRs) until you add rules.
+//
+// There are three rule types. Only 2 of the 3 rule types support conditions -
+// IPAM pool CIDR and Scope resource CIDR. Static CIDR rules cannot have
+// conditions.
+//
+//   - Static CIDR: A fixed list of CIDRs that do not change (like a manual list
+//     replicated across Regions)
+//
+//   - IPAM pool CIDR: CIDRs from specific IPAM pools (like all CIDRs from your
+//     IPAM production pool)
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Conditions:
+//
+//   - Property
+//
+//   - IPAM pool ID: Select an IPAM pool that contains the resources
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+//
+//   - Scope resource CIDR: CIDRs from Amazon Web Services resources like VPCs,
+//     subnets, EIPs within an IPAM scope
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Resource type: Select a resource, like a VPC or subnet.
+//
+//   - Conditions:
+//
+//   - Property:
+//
+//   - Resource ID: The unique ID of a resource (like vpc-1234567890abcdef0)
+//
+//   - Resource owner (like 111122223333)
+//
+//   - Resource region (like us-east-1)
+//
+//   - Resource tag (like key: name, value: dev-vpc-1)
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+type IpamPrefixListResolverRuleConditionRequest struct {
+
+	// The operation to perform when evaluating this condition.
+	//
+	// This member is required.
+	Operation IpamPrefixListResolverRuleConditionOperation
+
+	// A CIDR block to match against. This condition selects CIDRs that fall within or
+	// match the specified CIDR range.
+	Cidr *string
+
+	// The ID of the IPAM pool to match against. This condition selects CIDRs that
+	// belong to the specified IPAM pool.
+	IpamPoolId *string
+
+	// The ID of the Amazon Web Services resource to match against. This condition
+	// selects CIDRs associated with the specified resource.
+	ResourceId *string
+
+	// The Amazon Web Services account ID that owns the resources to match against.
+	// This condition selects CIDRs from resources owned by the specified account.
+	ResourceOwner *string
+
+	// The Amazon Web Services Region where the resources are located. This condition
+	// selects CIDRs from resources in the specified Region.
+	ResourceRegion *string
+
+	// A tag key-value pair to match against. This condition selects CIDRs from
+	// resources that have the specified tag.
+	ResourceTag *RequestIpamResourceTag
+
+	noSmithyDocumentSerde
+}
+
+// Describes a CIDR selection rule to include in a request. This is used when
+// creating or modifying resolver rules.
+//
+// CIDR selection rules define the business logic for selecting CIDRs from IPAM.
+// If a CIDR matches any of the rules, it will be included. If a rule has multiple
+// conditions, the CIDR has to match every condition of that rule. You can create a
+// prefix list resolver without any CIDR selection rules, but it will generate
+// empty versions (containing no CIDRs) until you add rules.
+//
+// There are three rule types. Only 2 of the 3 rule types support conditions -
+// IPAM pool CIDR and Scope resource CIDR. Static CIDR rules cannot have
+// conditions.
+//
+//   - Static CIDR: A fixed list of CIDRs that do not change (like a manual list
+//     replicated across Regions)
+//
+//   - IPAM pool CIDR: CIDRs from specific IPAM pools (like all CIDRs from your
+//     IPAM production pool)
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Conditions:
+//
+//   - Property
+//
+//   - IPAM pool ID: Select an IPAM pool that contains the resources
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+//
+//   - Scope resource CIDR: CIDRs from Amazon Web Services resources like VPCs,
+//     subnets, EIPs within an IPAM scope
+//
+// If you choose this option, choose the following:
+//
+//   - IPAM scope: Select the IPAM scope to search for resources
+//
+//   - Resource type: Select a resource, like a VPC or subnet.
+//
+//   - Conditions:
+//
+//   - Property:
+//
+//   - Resource ID: The unique ID of a resource (like vpc-1234567890abcdef0)
+//
+//   - Resource owner (like 111122223333)
+//
+//   - Resource region (like us-east-1)
+//
+//   - Resource tag (like key: name, value: dev-vpc-1)
+//
+//   - CIDR (like 10.24.34.0/23)
+//
+//   - Operation: Equals/Not equals
+//
+//   - Value: The value on which to match the condition
+type IpamPrefixListResolverRuleRequest struct {
+
+	// The type of CIDR selection rule. Valid values include include for selecting
+	// CIDRs that match the conditions, and exclude for excluding CIDRs that match the
+	// conditions.
+	//
+	// This member is required.
+	RuleType IpamPrefixListResolverRuleType
+
+	// The conditions that determine which CIDRs are selected by this rule. Conditions
+	// specify criteria such as resource type, tags, account IDs, and Regions.
+	Conditions []IpamPrefixListResolverRuleConditionRequest
+
+	// The ID of the IPAM scope from which to select CIDRs. This determines whether to
+	// select from public or private IP address space.
+	IpamScopeId *string
+
+	// For rules of type ipam-resource-cidr , this is the resource type.
+	ResourceType IpamResourceType
+
+	// A fixed list of CIDRs that do not change (like a manual list replicated across
+	// Regions).
+	StaticCidr *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes an IPAM prefix list resolver target.
+//
+// An IPAM prefix list resolver target is an association between a specific
+// customer-managed prefix list and an IPAM prefix list resolver. The target
+// enables the resolver to synchronize CIDRs selected by its rules into the
+// specified prefix list, which can then be referenced in Amazon Web Services
+// resources.
+type IpamPrefixListResolverTarget struct {
+
+	// The desired version of the prefix list that this target should synchronize with.
+	DesiredVersion *int64
+
+	// The ID of the IPAM prefix list resolver associated with this target.
+	IpamPrefixListResolverId *string
+
+	// The Amazon Resource Name (ARN) of the IPAM prefix list resolver target.
+	IpamPrefixListResolverTargetArn *string
+
+	// The ID of the IPAM prefix list resolver target.
+	IpamPrefixListResolverTargetId *string
+
+	// The version of the prefix list that was last successfully synchronized by this
+	// target.
+	LastSyncedVersion *int64
+
+	// The ID of the Amazon Web Services account that owns the IPAM prefix list
+	// resolver target.
+	OwnerId *string
+
+	// The ID of the managed prefix list associated with this target.
+	PrefixListId *string
+
+	// The Amazon Web Services Region where the prefix list associated with this
+	// target is located.
+	PrefixListRegion *string
+
+	// The current state of the IPAM prefix list resolver target. Valid values include
+	// create-in-progress , create-complete , create-failed , modify-in-progress ,
+	// modify-complete , modify-failed , delete-in-progress , delete-complete , and
+	// delete-failed .
+	State IpamPrefixListResolverTargetState
+
+	// A message describing the current state of the IPAM prefix list resolver target,
+	// including any error information.
+	StateMessage *string
+
+	// The tags assigned to the IPAM prefix list resolver target.
+	Tags []Tag
+
+	// Indicates whether this target automatically tracks the latest version of the
+	// prefix list.
+	TrackLatestVersion *bool
+
+	noSmithyDocumentSerde
+}
+
+// Describes a version of an IPAM prefix list resolver.
+//
+// Each version is a snapshot of what CIDRs matched your rules at that moment in
+// time. The version number increments every time the CIDR list changes due to
+// infrastructure changes.
+//
+// Version example:
+//
+// Initial State (Version 1)
+//
+// Production environment:
+//
+//   - vpc-prod-web (10.1.0.0/16) - tagged env=prod
+//
+//   - vpc-prod-db (10.2.0.0/16) - tagged env=prod
+//
+// Resolver rule: Include all VPCs tagged env=prod
+//
+// Version 1 CIDRs: 10.1.0.0/16, 10.2.0.0/16
+//
+// Infrastructure Change (Version 2)
+//
+// New VPC added:
+//
+//   - vpc-prod-api (10.3.0.0/16) - tagged env=prod
+//
+// IPAM automatically detects the change and creates a new version.
+//
+// Version 2 CIDRs: 10.1.0.0/16, 10.2.0.0/16, 10.3.0.0/16
+type IpamPrefixListResolverVersion struct {
+
+	// The version number of the IPAM prefix list resolver.
+	//
+	// Each version is a snapshot of what CIDRs matched your rules at that moment in
+	// time. The version number increments every time the CIDR list changes due to
+	// infrastructure changes.
+	Version *int64
+
+	noSmithyDocumentSerde
+}
+
+// Describes a CIDR entry in a specific version of an IPAM prefix list resolver.
+// This represents a CIDR that was selected and synchronized at a particular point
+// in time.
+type IpamPrefixListResolverVersionEntry struct {
+
+	// The CIDR block that was selected and synchronized in this resolver version.
+	Cidr *string
 
 	noSmithyDocumentSerde
 }
@@ -11126,10 +12315,10 @@ type IpamResourceDiscoveryAssociation struct {
 	//   - disassociate-failed - Resource discovery disassociation has failed.
 	//
 	//   - isolate-in-progress - Amazon Web Services account that created the resource
-	//   discovery association has been removed and the resource discovery associatation
-	//   is being isolated.
+	//   discovery association has been removed and the resource discovery association is
+	//   being isolated.
 	//
-	//   - isolate-complete - Resource discovery isolation is complete..
+	//   - isolate-complete - Resource discovery isolation is complete.
 	//
 	//   - restore-in-progress - Resource discovery is being restored.
 	State IpamResourceDiscoveryAssociationState
@@ -11173,6 +12362,19 @@ type IpamScope struct {
 	// The description of the scope.
 	Description *string
 
+	// The external authority configuration for this IPAM scope, if configured.
+	//
+	// The configuration that links an Amazon VPC IPAM scope to an external authority
+	// system. It specifies the type of external system and the external resource
+	// identifier that identifies your account or instance in that system.
+	//
+	// In IPAM, an external authority is a third-party IP address management system
+	// that provides CIDR blocks when you provision address space for top-level IPAM
+	// pools. This allows you to use your existing IP management system to control
+	// which address ranges are allocated to Amazon Web Services while using Amazon VPC
+	// IPAM to manage subnets within those ranges.
+	ExternalAuthorityConfiguration *IpamScopeExternalAuthorityConfiguration
+
 	// The ARN of the IPAM.
 	IpamArn *string
 
@@ -11205,6 +12407,29 @@ type IpamScope struct {
 	// resources that have a tag with the key Owner and the value TeamA , specify
 	// tag:Owner for the filter name and TeamA for the filter value.
 	Tags []Tag
+
+	noSmithyDocumentSerde
+}
+
+// The configuration that links an Amazon VPC IPAM scope to an external authority
+// system. It specifies the type of external system and the external resource
+// identifier that identifies your account or instance in that system.
+//
+// In IPAM, an external authority is a third-party IP address management system
+// that provides CIDR blocks when you provision address space for top-level IPAM
+// pools. This allows you to use your existing IP management system to control
+// which address ranges are allocated to Amazon Web Services while using Amazon VPC
+// IPAM to manage subnets within those ranges.
+type IpamScopeExternalAuthorityConfiguration struct {
+
+	// The identifier for the external resource managing this scope. For Infoblox
+	// integrations, this is the Infoblox resource identifier in the format
+	// .identity.account.. .
+	ExternalResourceIdentifier *string
+
+	// The type of external authority managing this scope. Currently supports Infoblox
+	// for integration with Infoblox Universal DDI.
+	Type IpamScopeExternalAuthorityType
 
 	noSmithyDocumentSerde
 }
@@ -11716,6 +12941,9 @@ type LaunchTemplateCpuOptions struct {
 	// The number of CPU cores for the instance.
 	CoreCount *int32
 
+	// Indicates whether the instance is enabled for nested virtualization.
+	NestedVirtualization NestedVirtualizationSpecification
+
 	// The number of threads per CPU core.
 	ThreadsPerCore *int32
 
@@ -11736,6 +12964,12 @@ type LaunchTemplateCpuOptionsRequest struct {
 	// The number of CPU cores for the instance.
 	CoreCount *int32
 
+	// Indicates whether to enable the instance for nested virtualization. Nested
+	// virtualization is supported only on 8th generation Intel-based instance types
+	// (c8i, m8i, r8i, and their flex variants). When nested virtualization is enabled,
+	// Virtual Secure Mode (VSM) is automatically disabled for the instance.
+	NestedVirtualization NestedVirtualizationSpecification
+
 	// The number of threads per CPU core. To disable multithreading for the instance,
 	// specify a value of 1 . Otherwise, specify the default value of 2 .
 	ThreadsPerCore *int32
@@ -11748,6 +12982,10 @@ type LaunchTemplateEbsBlockDevice struct {
 
 	// Indicates whether the EBS volume is deleted on instance termination.
 	DeleteOnTermination *bool
+
+	// The index of the EBS card. Some instance types support multiple EBS cards. The
+	// default EBS card index is 0.
+	EbsCardIndex *int32
 
 	// Indicates whether the EBS volume is encrypted.
 	Encrypted *bool
@@ -11784,6 +13022,10 @@ type LaunchTemplateEbsBlockDeviceRequest struct {
 
 	// Indicates whether the EBS volume is deleted on instance termination.
 	DeleteOnTermination *bool
+
+	// The index of the EBS card. Some instance types support multiple EBS cards. The
+	// default EBS card index is 0.
+	EbsCardIndex *int32
 
 	// Indicates whether the EBS volume is encrypted. Encrypted volumes can only be
 	// attached to instances that support Amazon EBS encryption. If you are creating a
@@ -12399,6 +13641,70 @@ type LaunchTemplateInstanceNetworkInterfaceSpecificationRequest struct {
 	noSmithyDocumentSerde
 }
 
+// Describes a secondary interface specification in a launch template.
+type LaunchTemplateInstanceSecondaryInterfaceSpecification struct {
+
+	// Indicates whether the secondary interface is deleted when the instance is
+	// terminated.
+	//
+	// The only supported value for this field is true .
+	DeleteOnTermination *bool
+
+	// The device index for the secondary interface attachment.
+	DeviceIndex *int32
+
+	// The type of secondary interface.
+	InterfaceType SecondaryInterfaceType
+
+	// The index of the network card.
+	NetworkCardIndex *int32
+
+	// The number of private IPv4 addresses to assign to the secondary interface.
+	//
+	// If you specify privateIpAddressCount you cannot specify privateIpAddresses
+	PrivateIpAddressCount *int32
+
+	// The private IPv4 addresses to assign to the secondary interface.
+	//
+	// If you specify privateIpAddresses you cannot specify privateIpAddressCount
+	PrivateIpAddresses []SecondaryInterfacePrivateIpAddressSpecification
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary interface specification for a launch template request.
+type LaunchTemplateInstanceSecondaryInterfaceSpecificationRequest struct {
+
+	// Indicates whether the secondary interface is deleted when the instance is
+	// terminated.
+	//
+	// The only supported value for this field is true .
+	DeleteOnTermination *bool
+
+	// The device index for the secondary interface attachment.
+	DeviceIndex *int32
+
+	// The type of secondary interface.
+	InterfaceType SecondaryInterfaceType
+
+	// The index of the network card.
+	NetworkCardIndex *int32
+
+	// The number of private IPv4 addresses to assign to the secondary interface.
+	PrivateIpAddressCount *int32
+
+	// The private IPv4 addresses to assign to the secondary interface.
+	PrivateIpAddresses []SecondaryInterfacePrivateIpAddressSpecificationRequest
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
+
+	noSmithyDocumentSerde
+}
+
 // Describes a license configuration.
 type LaunchTemplateLicenseConfiguration struct {
 
@@ -12454,8 +13760,18 @@ type LaunchTemplateNetworkPerformanceOptionsRequest struct {
 // Describes overrides for a launch template.
 type LaunchTemplateOverrides struct {
 
-	// The Availability Zone in which to launch the instances.
+	// The Availability Zone in which to launch the instances. For example, us-east-2a .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone in which to launch the instances. For example,
+	// use2-az1 .
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
+	AvailabilityZoneId *string
 
 	// The instance requirements. When you specify instance requirements, Amazon EC2
 	// will identify instance types with the provided requirements, and then use your
@@ -13308,6 +14624,21 @@ type ManagedPrefixList struct {
 	// The IP address version.
 	AddressFamily *string
 
+	// Indicates whether synchronization with an IPAM prefix list resolver is enabled
+	// for this managed prefix list. When enabled, the prefix list CIDRs are
+	// automatically updated based on the resolver's CIDR selection rules.
+	IpamPrefixListResolverSyncEnabled *bool
+
+	// The ID of the IPAM prefix list resolver target associated with this managed
+	// prefix list. When set, this prefix list becomes an IPAM managed prefix list.
+	//
+	// An IPAM-managed prefix list is a customer-managed prefix list that has been
+	// associated with an IPAM prefix list resolver target. When a prefix list becomes
+	// IPAM managed, its CIDRs are automatically synchronized based on the IPAM prefix
+	// list resolver's CIDR selection rules, and direct CIDR modifications are
+	// restricted.
+	IpamPrefixListResolverTargetId *string
+
 	// The maximum number of entries for the prefix list.
 	MaxEntries *int32
 
@@ -13544,6 +14875,9 @@ type ModifyTransitGatewayOptions struct {
 
 	// Enable or disable DNS support.
 	DnsSupport DnsSupportValue
+
+	// Enable or disable encryption support for VPC Encryption Control.
+	EncryptionSupport EncryptionSupportOptionValue
 
 	// The ID of the default propagation route table.
 	PropagationDefaultRouteTableId *string
@@ -13920,6 +15254,50 @@ type MovingAddressStatus struct {
 // Describes a NAT gateway.
 type NatGateway struct {
 
+	// The proxy appliances attached to the NAT Gateway for filtering and inspecting
+	// traffic to prevent data exfiltration.
+	AttachedAppliances []NatGatewayAttachedAppliance
+
+	// For regional NAT gateways only: Indicates whether Amazon Web Services
+	// automatically manages AZ coverage. When enabled, the NAT gateway associates EIPs
+	// in all AZs where your VPC has subnets to handle outbound NAT traffic, expands to
+	// new AZs when you create subnets there, and retracts from AZs where you've
+	// removed all subnets. When disabled, you must manually manage which AZs the NAT
+	// gateway supports and their corresponding EIPs.
+	//
+	// A regional NAT gateway is a single NAT Gateway that works across multiple
+	// availability zones (AZs) in your VPC, providing redundancy, scalability and
+	// availability across all the AZs in a Region.
+	//
+	// For more information, see [Regional NAT gateways for automatic multi-AZ expansion] in the Amazon VPC User Guide.
+	//
+	// [Regional NAT gateways for automatic multi-AZ expansion]: https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html
+	AutoProvisionZones AutoProvisionZonesState
+
+	// For regional NAT gateways only: Indicates whether Amazon Web Services
+	// automatically allocates additional Elastic IP addresses (EIPs) in an AZ when the
+	// NAT gateway needs more ports due to increased concurrent connections to a single
+	// destination from that AZ.
+	//
+	// For more information, see [Regional NAT gateways for automatic multi-AZ expansion] in the Amazon VPC User Guide.
+	//
+	// [Regional NAT gateways for automatic multi-AZ expansion]: https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html
+	AutoScalingIps AutoScalingIpsState
+
+	// Indicates whether this is a zonal (single-AZ) or regional (multi-AZ) NAT
+	// gateway.
+	//
+	// A zonal NAT gateway is a NAT Gateway that provides redundancy and scalability
+	// within a single availability zone. A regional NAT gateway is a single NAT
+	// Gateway that works across multiple availability zones (AZs) in your VPC,
+	// providing redundancy, scalability and availability across all the AZs in a
+	// Region.
+	//
+	// For more information, see [Regional NAT gateways for automatic multi-AZ expansion] in the Amazon VPC User Guide.
+	//
+	// [Regional NAT gateways for automatic multi-AZ expansion]: https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateways-regional.html
+	AvailabilityMode AvailabilityMode
+
 	// Indicates whether the NAT gateway supports public or private connectivity.
 	ConnectivityType ConnectivityType
 
@@ -13970,6 +15348,9 @@ type NatGateway struct {
 	// [documented limits]: https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html#vpc-limits-gateways
 	ProvisionedBandwidth *ProvisionedBandwidth
 
+	// For regional NAT gateways only, this is the ID of the NAT gateway.
+	RouteTableId *string
+
 	// The state of the NAT gateway.
 	//
 	//   - pending : The NAT gateway is being created and is not ready to process
@@ -14012,6 +15393,15 @@ type NatGatewayAddress struct {
 	// associated with the NAT gateway.
 	AssociationId *string
 
+	// The Availability Zone where this Elastic IP address (EIP) is being used to
+	// handle outbound NAT traffic.
+	AvailabilityZone *string
+
+	// The ID of the Availability Zone where this Elastic IP address (EIP) is being
+	// used to handle outbound NAT traffic. Use this instead of AvailabilityZone for
+	// consistent identification of AZs across Amazon Web Services Regions.
+	AvailabilityZoneId *string
+
 	// The address failure message.
 	FailureMessage *string
 
@@ -14030,6 +15420,38 @@ type NatGatewayAddress struct {
 
 	// The address status.
 	Status NatGatewayAddressStatus
+
+	noSmithyDocumentSerde
+}
+
+// Information about an appliance attached to a NAT Gateway, providing managed
+// security solutions for traffic filtering and inspection.
+type NatGatewayAttachedAppliance struct {
+
+	// The Amazon Resource Name (ARN) of the attached appliance, identifying the
+	// specific proxy or security appliance resource.
+	ApplianceArn *string
+
+	// The current attachment state of the appliance.
+	AttachmentState NatGatewayApplianceState
+
+	// The failure code if the appliance attachment or modification operation failed.
+	FailureCode *string
+
+	// A descriptive message explaining the failure if the appliance attachment or
+	// modification operation failed.
+	FailureMessage *string
+
+	// The current modification state of the appliance.
+	ModificationState NatGatewayApplianceModifyState
+
+	// The type of appliance attached to the NAT Gateway. For network firewall proxy
+	// functionality, this will be "network-firewall-proxy".
+	Type NatGatewayApplianceType
+
+	// The VPC endpoint ID used to route traffic from application VPCs to the proxy
+	// for inspection and filtering.
+	VpcEndpointId *string
 
 	noSmithyDocumentSerde
 }
@@ -14184,6 +15606,11 @@ type NetworkBandwidthGbpsRequest struct {
 // Describes the network card support of the instance type.
 type NetworkCardInfo struct {
 
+	// The number of additional network interfaces that can be attached to an instance
+	// when using flexible Elastic Network Adapter (ENA) queues. This number is in
+	// addition to the base number specified by maximumNetworkInterfaces .
+	AdditionalFlexibleNetworkInterfaces *int32
+
 	// The baseline network performance of the network card, in Gbps.
 	BaselineBandwidthInGbps *float64
 
@@ -14246,6 +15673,9 @@ type NetworkInfo struct {
 	// The maximum number of IPv4 addresses per network interface.
 	Ipv4AddressesPerInterface *int32
 
+	// The maximum number of IPv4 addresses per secondary interface.
+	Ipv4AddressesPerSecondaryInterface *int32
+
 	// The maximum number of IPv6 addresses per network interface.
 	Ipv6AddressesPerInterface *int32
 
@@ -14259,11 +15689,18 @@ type NetworkInfo struct {
 	// The maximum number of network interfaces for the instance type.
 	MaximumNetworkInterfaces *int32
 
+	// The maximum number of secondary interfaces for the instance type.
+	MaximumSecondaryNetworkInterfaces *int32
+
 	// Describes the network cards for the instance type.
 	NetworkCards []NetworkCardInfo
 
 	// The network performance.
 	NetworkPerformance *string
+
+	// Indicates whether secondary interface attachments from secondary network are
+	// supported.
+	SecondaryNetworkSupported *bool
 
 	noSmithyDocumentSerde
 }
@@ -15611,6 +17048,12 @@ type PlacementGroup struct {
 	// The name of the placement group.
 	GroupName *string
 
+	// Reserved for future use.
+	LinkedGroupId *string
+
+	// The service provider that manages the Placement Group.
+	Operator *OperatorResponse
+
 	// The number of partitions. Valid only if strategy is set to partition .
 	PartitionCount *int32
 
@@ -15811,7 +17254,7 @@ type PrivateDnsNameConfiguration struct {
 
 	// The verification state of the VPC endpoint service.
 	//
-	// >Consumers of the endpoint service can use the private name only when the state
+	// Consumers of the endpoint service can use the private name only when the state
 	// is verified .
 	State DnsNameState
 
@@ -16142,6 +17585,9 @@ type Region struct {
 	// The Region service endpoint.
 	Endpoint *string
 
+	// The geography information for the Region. The geography is returned as a list.
+	Geography []RegionGeography
+
 	// The Region opt-in status. The possible values are opt-in-not-required , opted-in
 	// , and not-opted-in .
 	OptInStatus *string
@@ -16165,6 +17611,69 @@ type RegionalSummary struct {
 
 	// The Amazon Web Services Region.
 	RegionName *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes the geography information for a Region.
+type RegionGeography struct {
+
+	// The name of the geography, for example, United States of America .
+	Name *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes an Amazon EC2 instance that is enabled for SQL Server High
+// Availability standby detection monitoring.
+type RegisteredInstance struct {
+
+	// The SQL Server High Availability status of the instance. Valid values are:
+	//
+	//   - processing - The SQL Server High Availability status for the SQL Server High
+	//   Availability instance is being updated.
+	//
+	//   - active - The SQL Server High Availability instance is an active node in an
+	//   SQL Server High Availability cluster.
+	//
+	//   - standby - The SQL Server High Availability instance is a standby failover
+	//   node in an SQL Server High Availability cluster.
+	//
+	//   - invalid - An error occurred due to misconfigured permissions, or unable to
+	//   dertemine SQL Server High Availability status for the SQL Server High
+	//   Availability instance.
+	HaStatus HaStatus
+
+	// The ID of the SQL Server High Availability instance.
+	InstanceId *string
+
+	// The date and time when the instance's SQL Server High Availability status was
+	// last updated, in the ISO 8601 format in the UTC time zone (
+	// YYYY-MM-DDThh:mm:ss.sssZ ).
+	LastUpdatedTime *time.Time
+
+	// A brief description of the SQL Server High Availability status. If the instance
+	// is in the invalid High Availability status, this parameter includes the error
+	// message.
+	ProcessingStatus *string
+
+	// The ARN of the Secrets Manager secret containing the SQL Server access
+	// credentials for the SQL Server High Availability instance. If not specified,
+	// deafult local user credentials will be used by the Amazon Web Services Systems
+	// Manager agent.
+	SqlServerCredentials *string
+
+	// The license type for the SQL Server license. Valid values include:
+	//
+	//   - full - The SQL Server High Availability instance is using a full SQL Server
+	//   license.
+	//
+	//   - waived - The SQL Server High Availability instance is waived from the SQL
+	//   Server license.
+	SqlServerLicenseUsage SqlServerLicenseUsage
+
+	// The tags assigned to the SQL Server High Availability instance.
+	Tags []Tag
 
 	noSmithyDocumentSerde
 }
@@ -16564,6 +18073,9 @@ type RequestLaunchTemplateData struct {
 	//
 	// [User provided kernels]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/UserProvidedkernels.html
 	RamDiskId *string
+
+	// The secondary interfaces to associate with instances launched from the template.
+	SecondaryInterfaces []LaunchTemplateInstanceSecondaryInterfaceSpecificationRequest
 
 	// The IDs of the security groups.
 	//
@@ -17249,6 +18761,9 @@ type ResponseLaunchTemplateData struct {
 
 	// The ID of the RAM disk, if applicable.
 	RamDiskId *string
+
+	// The secondary interfaces associated with the launch template.
+	SecondaryInterfaces []LaunchTemplateInstanceSecondaryInterfaceSpecification
 
 	// The security group IDs.
 	SecurityGroupIds []string
@@ -18255,6 +19770,223 @@ type ScheduledInstancesPrivateIpAddressConfig struct {
 
 	// The IPv4 address.
 	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary interface.
+type SecondaryInterface struct {
+
+	// The attachment information for the secondary interface.
+	Attachment *SecondaryInterfaceAttachment
+
+	// The Availability Zone of the secondary interface.
+	AvailabilityZone *string
+
+	// The ID of the Availability Zone of the secondary interface.
+	AvailabilityZoneId *string
+
+	// The MAC address of the secondary interface.
+	MacAddress *string
+
+	// The ID of the Amazon Web Services account that owns the secondary interface.
+	OwnerId *string
+
+	// The private IPv4 addresses associated with the secondary interface.
+	PrivateIpv4Addresses []SecondaryInterfaceIpv4Address
+
+	// The Amazon Resource Name (ARN) of the secondary interface.
+	SecondaryInterfaceArn *string
+
+	// The ID of the secondary interface.
+	SecondaryInterfaceId *string
+
+	// The type of secondary interface.
+	SecondaryInterfaceType SecondaryInterfaceType
+
+	// The ID of the secondary network.
+	SecondaryNetworkId *string
+
+	// The type of the secondary network.
+	SecondaryNetworkType SecondaryNetworkType
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
+
+	// Indicates whether source/destination checking is enabled.
+	SourceDestCheck *bool
+
+	// The status of the secondary interface.
+	Status SecondaryInterfaceStatus
+
+	// The tags assigned to the secondary interface.
+	Tags []Tag
+
+	noSmithyDocumentSerde
+}
+
+// Describes the attachment of a secondary interface to an instance.
+type SecondaryInterfaceAttachment struct {
+
+	// The timestamp when the attachment was created.
+	AttachTime *time.Time
+
+	// The ID of the attachment.
+	AttachmentId *string
+
+	// Indicates whether the secondary interface is deleted when the instance is
+	// terminated.
+	//
+	// The only supported value for this field is true .
+	DeleteOnTermination *bool
+
+	// The device index of the secondary interface.
+	DeviceIndex *int32
+
+	// The ID of the instance to which the secondary interface is attached.
+	InstanceId *string
+
+	// The Amazon Web Services account ID of the owner of the instance.
+	InstanceOwnerId *string
+
+	// The index of the network card.
+	NetworkCardIndex *int32
+
+	// The attachment state.
+	Status AttachmentStatus
+
+	noSmithyDocumentSerde
+}
+
+// Describes a private IPv4 address for a secondary interface.
+type SecondaryInterfaceIpv4Address struct {
+
+	// The private IPv4 address.
+	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a private IPv4 address specification for a secondary interface.
+type SecondaryInterfacePrivateIpAddressSpecification struct {
+
+	// The private IPv4 address.
+	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a private IPv4 address specification for a secondary interface
+// request.
+type SecondaryInterfacePrivateIpAddressSpecificationRequest struct {
+
+	// The private IPv4 address.
+	PrivateIpAddress *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary network.
+type SecondaryNetwork struct {
+
+	// Information about the IPv4 CIDR blocks associated with the secondary network.
+	Ipv4CidrBlockAssociations []SecondaryNetworkIpv4CidrBlockAssociation
+
+	// The ID of the Amazon Web Services account that owns the secondary network.
+	OwnerId *string
+
+	// The Amazon Resource Name (ARN) of the secondary network.
+	SecondaryNetworkArn *string
+
+	// The ID of the secondary network.
+	SecondaryNetworkId *string
+
+	// The state of the secondary network.
+	State SecondaryNetworkState
+
+	// The reason for the current state of the secondary network.
+	StateReason *string
+
+	// The tags assigned to the secondary network.
+	Tags []Tag
+
+	// The type of the secondary network.
+	Type SecondaryNetworkType
+
+	noSmithyDocumentSerde
+}
+
+// Describes an IPv4 CIDR block associated with a secondary network.
+type SecondaryNetworkIpv4CidrBlockAssociation struct {
+
+	// The association ID for the IPv4 CIDR block.
+	AssociationId *string
+
+	// The IPv4 CIDR block.
+	CidrBlock *string
+
+	// The state of the CIDR block association.
+	State SecondaryNetworkCidrBlockAssociationState
+
+	// The reason for the current state of the CIDR block association.
+	StateReason *string
+
+	noSmithyDocumentSerde
+}
+
+// Describes a secondary subnet.
+type SecondarySubnet struct {
+
+	// The Availability Zone of the secondary subnet.
+	AvailabilityZone *string
+
+	// The ID of the Availability Zone of the secondary subnet.
+	AvailabilityZoneId *string
+
+	// Information about the IPv4 CIDR blocks associated with the secondary subnet.
+	Ipv4CidrBlockAssociations []SecondarySubnetIpv4CidrBlockAssociation
+
+	// The ID of the Amazon Web Services account that owns the secondary subnet.
+	OwnerId *string
+
+	// The ID of the secondary network.
+	SecondaryNetworkId *string
+
+	// The type of the secondary network.
+	SecondaryNetworkType SecondaryNetworkType
+
+	// The Amazon Resource Name (ARN) of the secondary subnet.
+	SecondarySubnetArn *string
+
+	// The ID of the secondary subnet.
+	SecondarySubnetId *string
+
+	// The state of the secondary subnet.
+	State SecondarySubnetState
+
+	// The reason for the current state of the secondary subnet.
+	StateReason *string
+
+	// The tags assigned to the secondary subnet.
+	Tags []Tag
+
+	noSmithyDocumentSerde
+}
+
+// Describes an IPv4 CIDR block associated with a secondary subnet.
+type SecondarySubnetIpv4CidrBlockAssociation struct {
+
+	// The association ID for the IPv4 CIDR block.
+	AssociationId *string
+
+	// The IPv4 CIDR block.
+	CidrBlock *string
+
+	// The state of the CIDR block association.
+	State SecondarySubnetCidrBlockAssociationState
+
+	// The reason for the current state of the CIDR block association.
+	StateReason *string
 
 	noSmithyDocumentSerde
 }
@@ -19974,11 +21706,23 @@ type SpotOptionsRequest struct {
 // Describes Spot Instance placement.
 type SpotPlacement struct {
 
-	// The Availability Zone.
+	// The Availability Zone. For example, us-east-2a .
 	//
 	// [Spot Fleet only] To specify multiple Availability Zones, separate them using
-	// commas; for example, "us-west-2a, us-west-2b".
+	// commas; for example, " us-east-2a , us-east-2b ".
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
 	AvailabilityZone *string
+
+	// The ID of the Availability Zone. For example, use2-az1 .
+	//
+	// [Spot Fleet only] To specify multiple Availability Zones, separate them using
+	// commas; for example, " use2-az1 , use2-bz1 ".
+	//
+	// Either AvailabilityZone or AvailabilityZoneId must be specified in the request,
+	// but not both.
+	AvailabilityZoneId *string
 
 	// The name of the placement group.
 	GroupName *string
@@ -21142,6 +22886,92 @@ type TransitGatewayConnectRequestBgpOptions struct {
 	noSmithyDocumentSerde
 }
 
+// Describes a transit gateway metering policy.
+type TransitGatewayMeteringPolicy struct {
+
+	// The IDs of the middlebox attachments associated with the metering policy.
+	MiddleboxAttachmentIds []string
+
+	// The state of the transit gateway metering policy.
+	State TransitGatewayMeteringPolicyState
+
+	// The tags assigned to the transit gateway metering policy.
+	Tags []Tag
+
+	// The ID of the transit gateway associated with the metering policy.
+	TransitGatewayId *string
+
+	// The ID of the transit gateway metering policy.
+	TransitGatewayMeteringPolicyId *string
+
+	// The date and time when the metering policy update becomes effective.
+	UpdateEffectiveAt *time.Time
+
+	noSmithyDocumentSerde
+}
+
+// Describes an entry in a transit gateway metering policy.
+type TransitGatewayMeteringPolicyEntry struct {
+
+	// The Amazon Web Services account ID to which the metered traffic is attributed.
+	MeteredAccount TransitGatewayMeteringPayerType
+
+	// The metering policy rule that defines traffic matching criteria.
+	MeteringPolicyRule *TransitGatewayMeteringPolicyRule
+
+	// The rule number of the metering policy entry.
+	PolicyRuleNumber *string
+
+	// The state of the metering policy entry.
+	State TransitGatewayMeteringPolicyEntryState
+
+	// The date and time when the metering policy entry update becomes effective.
+	UpdateEffectiveAt *time.Time
+
+	// The date and time when the metering policy entry was last updated.
+	UpdatedAt *time.Time
+
+	noSmithyDocumentSerde
+}
+
+// Describes the traffic matching criteria for a transit gateway metering policy
+// rule.
+type TransitGatewayMeteringPolicyRule struct {
+
+	// The destination CIDR block for the rule.
+	DestinationCidrBlock *string
+
+	// The destination port range for the rule.
+	DestinationPortRange *string
+
+	// The ID of the destination transit gateway attachment.
+	DestinationTransitGatewayAttachmentId *string
+
+	// The type of the destination transit gateway attachment. Note that the
+	// tgw-peering resource type has been deprecated. To configure metering policies
+	// for Connect, use the transport attachment type.
+	DestinationTransitGatewayAttachmentType TransitGatewayAttachmentResourceType
+
+	// The protocol for the rule (1, 6, 17, etc.).
+	Protocol *string
+
+	// The source CIDR block for the rule.
+	SourceCidrBlock *string
+
+	// The source port range for the rule.
+	SourcePortRange *string
+
+	// The ID of the source transit gateway attachment.
+	SourceTransitGatewayAttachmentId *string
+
+	// The type of the source transit gateway attachment. Note that the tgw-peering
+	// resource type has been deprecated. To configure metering policies for Connect,
+	// use the transport attachment type.
+	SourceTransitGatewayAttachmentType TransitGatewayAttachmentResourceType
+
+	noSmithyDocumentSerde
+}
+
 // Describes the deregistered transit gateway multicast group members.
 type TransitGatewayMulticastDeregisteredGroupMembers struct {
 
@@ -21367,6 +23197,9 @@ type TransitGatewayOptions struct {
 
 	// Indicates whether DNS support is enabled.
 	DnsSupport DnsSupportValue
+
+	// Defines if the Transit Gateway supports VPC Encryption Control.
+	EncryptionSupport *EncryptionSupport
 
 	// Indicates whether multicast is enabled on the transit gateway
 	MulticastSupport MulticastSupportValue
@@ -22920,6 +24753,10 @@ type VolumeAttachment struct {
 	// parameter returns null .
 	Device *string
 
+	// The index of the EBS card. Some instance types support multiple EBS cards. The
+	// default EBS card index is 0.
+	EbsCardIndex *int32
+
 	// The ID of the instance.
 	//
 	// If the volume is attached to an Amazon Web Services-managed resource, this
@@ -23003,6 +24840,61 @@ type VolumeModification struct {
 
 	// The ID of the volume.
 	VolumeId *string
+
+	noSmithyDocumentSerde
+}
+
+// Information about a volume that is currently in the Recycle Bin.
+type VolumeRecycleBinInfo struct {
+
+	// The Availability Zone for the volume.
+	AvailabilityZone *string
+
+	// The ID of the Availability Zone for the volume.
+	AvailabilityZoneId *string
+
+	// The time stamp when volume creation was initiated.
+	CreateTime *time.Time
+
+	// The number of I/O operations per second (IOPS) for the volume.
+	Iops *int32
+
+	// The service provider that manages the volume.
+	Operator *OperatorResponse
+
+	// The ARN of the Outpost on which the volume is stored. For more information, see [Amazon EBS volumes on Outposts]
+	// in the Amazon EBS User Guide.
+	//
+	// [Amazon EBS volumes on Outposts]: https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volumes-outposts.html
+	OutpostArn *string
+
+	// The date and time when the volume entered the Recycle Bin.
+	RecycleBinEnterTime *time.Time
+
+	// The date and time when the volume is to be permanently deleted from the Recycle
+	// Bin.
+	RecycleBinExitTime *time.Time
+
+	// The size of the volume, in GiB.
+	Size *int32
+
+	// The snapshot from which the volume was created, if applicable.
+	SnapshotId *string
+
+	// The ID of the source volume.
+	SourceVolumeId *string
+
+	// The state of the volume.
+	State VolumeState
+
+	// The throughput that the volume supports, in MiB/s.
+	Throughput *int32
+
+	// The ID of the volume.
+	VolumeId *string
+
+	// The volume type.
+	VolumeType VolumeType
 
 	noSmithyDocumentSerde
 }
@@ -23152,6 +25044,11 @@ type Vpc struct {
 	// The ID of the set of DHCP options you've associated with the VPC.
 	DhcpOptionsId *string
 
+	// Describes the configuration and state of VPC encryption controls.
+	//
+	// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+	//
+	// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
 	EncryptionControl *VpcEncryptionControl
 
 	// The allowed tenancy of instances launched into the VPC.
@@ -23339,42 +25236,152 @@ type VpcClassicLink struct {
 	noSmithyDocumentSerde
 }
 
+// Describes the configuration and state of VPC encryption controls.
+//
+// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+//
+// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
 type VpcEncryptionControl struct {
+
+	// The encryption mode for the VPC Encryption Control configuration.
 	Mode VpcEncryptionControlMode
 
+	// Information about resource exclusions for the VPC Encryption Control
+	// configuration.
 	ResourceExclusions *VpcEncryptionControlExclusions
 
+	// The current state of the VPC Encryption Control configuration.
 	State VpcEncryptionControlState
 
+	// A message providing additional information about the encryption control state.
 	StateMessage *string
 
+	// The tags assigned to the VPC Encryption Control configuration.
 	Tags []Tag
 
+	// The ID of the VPC Encryption Control configuration.
 	VpcEncryptionControlId *string
 
+	// The ID of the VPC associated with the encryption control configuration.
 	VpcId *string
 
 	noSmithyDocumentSerde
 }
 
+// Describes the configuration settings for VPC Encryption Control.
+//
+// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+//
+// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
+type VpcEncryptionControlConfiguration struct {
+
+	// The encryption mode for the VPC Encryption Control configuration.
+	//
+	// This member is required.
+	Mode VpcEncryptionControlMode
+
+	// Specifies whether to exclude egress-only internet gateway traffic from
+	// encryption enforcement.
+	EgressOnlyInternetGatewayExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude Elastic File System traffic from encryption
+	// enforcement.
+	ElasticFileSystemExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude internet gateway traffic from encryption
+	// enforcement.
+	InternetGatewayExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude Lambda function traffic from encryption
+	// enforcement.
+	LambdaExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude NAT gateway traffic from encryption enforcement.
+	NatGatewayExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude virtual private gateway traffic from encryption
+	// enforcement.
+	VirtualPrivateGatewayExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude VPC Lattice traffic from encryption enforcement.
+	VpcLatticeExclusion VpcEncryptionControlExclusionStateInput
+
+	// Specifies whether to exclude VPC peering connection traffic from encryption
+	// enforcement.
+	VpcPeeringExclusion VpcEncryptionControlExclusionStateInput
+
+	noSmithyDocumentSerde
+}
+
+// Describes an exclusion configuration for VPC Encryption Control.
+//
+// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+//
+// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
 type VpcEncryptionControlExclusion struct {
+
+	// The current state of the exclusion configuration.
 	State VpcEncryptionControlExclusionState
 
+	// A message providing additional information about the exclusion state.
 	StateMessage *string
 
 	noSmithyDocumentSerde
 }
 
+// Describes the exclusion configurations for various resource types in VPC
+// Encryption Control.
+//
+// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+//
+// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
 type VpcEncryptionControlExclusions struct {
+
+	// The exclusion configuration for egress-only internet gateway traffic.
 	EgressOnlyInternetGateway *VpcEncryptionControlExclusion
 
+	// The exclusion configuration for Elastic File System traffic.
+	ElasticFileSystem *VpcEncryptionControlExclusion
+
+	// The exclusion configuration for internet gateway traffic.
 	InternetGateway *VpcEncryptionControlExclusion
 
+	// The exclusion configuration for Lambda function traffic.
+	Lambda *VpcEncryptionControlExclusion
+
+	// The exclusion configuration for NAT gateway traffic.
 	NatGateway *VpcEncryptionControlExclusion
 
+	// The exclusion configuration for virtual private gateway traffic.
 	VirtualPrivateGateway *VpcEncryptionControlExclusion
 
+	// The exclusion configuration for VPC Lattice traffic.
+	VpcLattice *VpcEncryptionControlExclusion
+
+	// The exclusion configuration for VPC peering connection traffic.
 	VpcPeering *VpcEncryptionControlExclusion
+
+	noSmithyDocumentSerde
+}
+
+// Describes a resource that is not compliant with VPC encryption requirements.
+//
+// For more information, see [Enforce VPC encryption in transit] in the Amazon VPC User Guide.
+//
+// [Enforce VPC encryption in transit]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-encryption-controls.html
+type VpcEncryptionNonCompliantResource struct {
+
+	// A description of the non-compliant resource.
+	Description *string
+
+	// The ID of the non-compliant resource.
+	Id *string
+
+	// Indicates whether the resource can be excluded from encryption enforcement.
+	IsExcludable *bool
+
+	// The type of the non-compliant resource.
+	Type *string
 
 	noSmithyDocumentSerde
 }
@@ -23664,6 +25671,30 @@ type VpcPeeringConnectionVpcInfo struct {
 	noSmithyDocumentSerde
 }
 
+// Describes a VPN concentrator.
+type VpnConcentrator struct {
+
+	// The current state of the VPN concentrator.
+	State *string
+
+	// Any tags assigned to the VPN concentrator.
+	Tags []Tag
+
+	// The ID of the transit gateway attachment for the VPN concentrator.
+	TransitGatewayAttachmentId *string
+
+	// The ID of the transit gateway associated with the VPN concentrator.
+	TransitGatewayId *string
+
+	// The type of VPN concentrator.
+	Type *string
+
+	// The ID of the VPN concentrator.
+	VpnConcentratorId *string
+
+	noSmithyDocumentSerde
+}
+
 // Describes a VPN connection.
 type VpnConnection struct {
 
@@ -23714,6 +25745,9 @@ type VpnConnection struct {
 
 	// Information about the VPN tunnel.
 	VgwTelemetry []VgwTelemetry
+
+	// The ID of the VPN concentrator associated with the VPN connection.
+	VpnConcentratorId *string
 
 	// The ID of the VPN connection.
 	VpnConnectionId *string
@@ -23781,6 +25815,13 @@ type VpnConnectionOptions struct {
 	// The transit gateway attachment ID in use for the VPN tunnel.
 	TransportTransitGatewayAttachmentId *string
 
+	//  The configured bandwidth for the VPN tunnel. Represents the current throughput
+	// capacity setting for the tunnel connection. standard tunnel bandwidth supports
+	// up to 1.25 Gbps per tunnel while large supports up to 5 Gbps per tunnel. If no
+	// tunnel bandwidth was specified for the connection, standard is used as the
+	// default value.
+	TunnelBandwidth VpnTunnelBandwidth
+
 	// Indicates whether the VPN tunnels process IPv4 or IPv6 traffic.
 	TunnelInsideIpVersion TunnelInsideIpVersion
 
@@ -23837,6 +25878,13 @@ type VpnConnectionOptionsSpecification struct {
 	//
 	// Required if OutsideIpAddressType is set to PrivateIpv4 .
 	TransportTransitGatewayAttachmentId *string
+
+	//  The desired bandwidth specification for the VPN tunnel, used when creating or
+	// modifying VPN connection options to set the tunnel's throughput capacity.
+	// standard supports up to 1.25 Gbps per tunnel, while large supports up to 5 Gbps
+	// per tunnel. The default value is standard . Existing VPN connections without a
+	// bandwidth setting will automatically default to standard .
+	TunnelBandwidth VpnTunnelBandwidth
 
 	// Indicate whether the VPN tunnels process IPv4 or IPv6 traffic.
 	//

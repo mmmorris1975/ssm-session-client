@@ -1025,6 +1025,9 @@ func awsAwsjson11_deserializeOpErrorCreateDocument(response *smithyhttp.Response
 	case strings.EqualFold("MaxDocumentSizeExceeded", errorCode):
 		return awsAwsjson11_deserializeErrorMaxDocumentSizeExceeded(response, errorBody)
 
+	case strings.EqualFold("NoLongerSupportedException", errorCode):
+		return awsAwsjson11_deserializeErrorNoLongerSupportedException(response, errorBody)
+
 	case strings.EqualFold("TooManyUpdates", errorCode):
 		return awsAwsjson11_deserializeErrorTooManyUpdates(response, errorBody)
 
@@ -15170,6 +15173,9 @@ func awsAwsjson11_deserializeOpErrorStartChangeRequestExecution(response *smithy
 	case strings.EqualFold("InvalidAutomationExecutionParametersException", errorCode):
 		return awsAwsjson11_deserializeErrorInvalidAutomationExecutionParametersException(response, errorBody)
 
+	case strings.EqualFold("NoLongerSupportedException", errorCode):
+		return awsAwsjson11_deserializeErrorNoLongerSupportedException(response, errorBody)
+
 	default:
 		genericError := &smithy.GenericAPIError{
 			Code:    errorCode,
@@ -20447,6 +20453,41 @@ func awsAwsjson11_deserializeErrorMaxDocumentSizeExceeded(response *smithyhttp.R
 	return output
 }
 
+func awsAwsjson11_deserializeErrorNoLongerSupportedException(response *smithyhttp.Response, errorBody *bytes.Reader) error {
+	var buff [1024]byte
+	ringBuffer := smithyio.NewRingBuffer(buff[:])
+
+	body := io.TeeReader(errorBody, ringBuffer)
+	decoder := json.NewDecoder(body)
+	decoder.UseNumber()
+	var shape interface{}
+	if err := decoder.Decode(&shape); err != nil && err != io.EOF {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return err
+	}
+
+	output := &types.NoLongerSupportedException{}
+	err := awsAwsjson11_deserializeDocumentNoLongerSupportedException(&output, shape)
+
+	if err != nil {
+		var snapshot bytes.Buffer
+		io.Copy(&snapshot, ringBuffer)
+		err = &smithy.DeserializationError{
+			Err:      fmt.Errorf("failed to decode response body, %w", err),
+			Snapshot: snapshot.Bytes(),
+		}
+		return err
+	}
+
+	errorBody.Seek(0, io.SeekStart)
+	return output
+}
+
 func awsAwsjson11_deserializeErrorOpsItemAccessDeniedException(response *smithyhttp.Response, errorBody *bytes.Reader) error {
 	var buff [1024]byte
 	ringBuffer := smithyio.NewRingBuffer(buff[:])
@@ -23161,6 +23202,15 @@ func awsAwsjson11_deserializeDocumentAssociationDescription(v **types.Associatio
 				sv.ApplyOnlyAtCronInterval = jtv
 			}
 
+		case "AssociationDispatchAssumeRole":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected AssociationDispatchAssumeRoleArn to be of type string, got %T instead", value)
+				}
+				sv.AssociationDispatchAssumeRole = ptr.String(jtv)
+			}
+
 		case "AssociationId":
 			if value != nil {
 				jtv, ok := value.(string)
@@ -24099,6 +24149,15 @@ func awsAwsjson11_deserializeDocumentAssociationVersionInfo(v **types.Associatio
 					return fmt.Errorf("expected ApplyOnlyAtCronInterval to be of type *bool, got %T instead", value)
 				}
 				sv.ApplyOnlyAtCronInterval = jtv
+			}
+
+		case "AssociationDispatchAssumeRole":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected AssociationDispatchAssumeRoleArn to be of type string, got %T instead", value)
+				}
+				sv.AssociationDispatchAssumeRole = ptr.String(jtv)
 			}
 
 		case "AssociationId":
@@ -35634,6 +35693,46 @@ loop:
 		}
 	}
 	*v = uv
+	return nil
+}
+
+func awsAwsjson11_deserializeDocumentNoLongerSupportedException(v **types.NoLongerSupportedException, value interface{}) error {
+	if v == nil {
+		return fmt.Errorf("unexpected nil of type %T", v)
+	}
+	if value == nil {
+		return nil
+	}
+
+	shape, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected JSON type %v", value)
+	}
+
+	var sv *types.NoLongerSupportedException
+	if *v == nil {
+		sv = &types.NoLongerSupportedException{}
+	} else {
+		sv = *v
+	}
+
+	for key, value := range shape {
+		switch key {
+		case "message", "Message":
+			if value != nil {
+				jtv, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("expected String to be of type string, got %T instead", value)
+				}
+				sv.Message = ptr.String(jtv)
+			}
+
+		default:
+			_, _ = key, value
+
+		}
+	}
+	*v = sv
 	return nil
 }
 
