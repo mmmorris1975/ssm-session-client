@@ -224,7 +224,9 @@ func (r *EC2Resolver) Resolve(filter ...types.Filter) (string, error) {
 				log.Print("WARNING: more than 1 instance found, using 1st value")
 			}
 
-			return *res.Instances[0].InstanceId, nil
+			if res.Instances[0].InstanceId != nil {
+				return *res.Instances[0].InstanceId, nil
+			}
 		}
 	}
 

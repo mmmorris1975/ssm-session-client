@@ -36,28 +36,34 @@ type DataChannel interface {
 // SsmDataChannel represents the data channel of the websocket connection used to communicate with the AWS
 // SSM service.  A new(SsmDataChannel) is ready for use, and should immediately call the Open() method.
 type SsmDataChannel struct {
-	seqNum      int64
-	inSeqNum    int64
-	mu          sync.Mutex
-	ws          *websocket.Conn
-	synSent     bool
-	handshakeCh chan bool
-	pausePub    bool
-	outMsgBuf   MessageBuffer
-	inMsgBuf    MessageBuffer
-	lastRows    uint32
-	lastCols    uint32
+	seqNum        int64
+	inSeqNum      int64
+	mu            sync.Mutex
+	ws            *websocket.Conn
+	synSent       bool
+	handshakeCh   chan bool
+	handshakeOnce sync.Once
+	pausePub      bool
+	outMsgBuf     MessageBuffer
+	inMsgBuf      MessageBuffer
+	lastRows      uint32
+	lastCols      uint32
 }
 
 // Open creates the web socket connection with the AWS service and opens the data channel.
 func (c *SsmDataChannel) Open(cfg aws.Config, in *ssm.StartSessionInput) error {
 	c.handshakeCh = make(chan bool, 1)
+	c.handshakeOnce = sync.Once{}
 	c.outMsgBuf = NewMessageBuffer(50)
 	c.inMsgBuf = NewMessageBuffer(50)
 
 	go c.processOutboundQueue()
 
-	return c.startSession(cfg, in)
+	if err := c.startSession(cfg, in); err != nil {
+		c.outMsgBuf = nil // signals processOutboundQueue to exit
+		return err
+	}
+	return nil
 }
 
 // Close shuts down the web socket connection with the AWS service. Type-specific actions (like sending
@@ -282,9 +288,11 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 				return nil, err
 			}
 		case HandshakeComplete:
-			if c.handshakeCh != nil {
-				close(c.handshakeCh)
-			}
+			c.handshakeOnce.Do(func() {
+				if c.handshakeCh != nil {
+					close(c.handshakeCh)
+				}
+			})
 		default:
 			return nil, fmt.Errorf("UNKNOWN INCOMING MSG PAYLOAD: %s\n%s", m, m.Payload)
 		}
@@ -479,6 +487,9 @@ func (c *SsmDataChannel) startSession(cfg aws.Config, in *ssm.StartSessionInput)
 	out, err := ssm.NewFromConfig(cfg).StartSession(context.Background(), in)
 	if err != nil {
 		return err
+	}
+	if out.StreamUrl == nil || out.TokenValue == nil {
+		return errors.New("StartSession response missing StreamUrl or TokenValue")
 	}
 	return c.StartSessionFromDataChannelURL(*out.StreamUrl, *out.TokenValue)
 }

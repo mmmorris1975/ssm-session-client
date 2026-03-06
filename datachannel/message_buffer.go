@@ -67,8 +67,8 @@ func (m *messageBuffer) Get(seqNum int64) *AgentMessage {
 }
 
 func (m *messageBuffer) Next() *AgentMessage {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	var el *list.Element
 	if m.cursor == nil {

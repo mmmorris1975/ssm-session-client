@@ -2,6 +2,7 @@ package ssmclient
 
 import (
 	"context"
+	"errors"
 
 	"github.com/aws/session-manager-plugin/src/datachannel"
 	"github.com/aws/session-manager-plugin/src/log"
@@ -22,6 +23,14 @@ func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
 	ep, err := ssm.NewDefaultEndpointResolver().ResolveEndpoint(cfg.Region, ssm.EndpointResolverOptions{})
 	if err != nil {
 		return err
+	}
+
+	if out.SessionId == nil || out.StreamUrl == nil || out.TokenValue == nil {
+		return errors.New("StartSession response missing required fields")
+	}
+
+	if input.Target == nil {
+		return errors.New("StartSession input missing Target")
 	}
 
 	ssmSession := new(session.Session)
