@@ -84,13 +84,13 @@ type HandshakeRequestPayload struct {
 // RequestedClientAction is the type of actions requested as part of the handshake negotiation.
 type RequestedClientAction struct {
 	ActionType       ActionType
-	ActionParameters interface{}
+	ActionParameters any
 }
 
 // SessionTypeRequest is part of the handshake process.
 type SessionTypeRequest struct {
 	SessionType string
-	Properties  interface{}
+	Properties  any
 }
 
 // HandshakeResponsePayload is the local client response to the offered handshake request.  The ProcessedClientActions

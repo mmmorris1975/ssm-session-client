@@ -436,7 +436,7 @@ func (c *SsmDataChannel) processOutboundQueue() {
 // sendAcknowledgeMessage sends the Acknowledge message type for each incoming message read from
 // the web socket connection, which is required as part of the SSM session protocol.
 func (c *SsmDataChannel) sendAcknowledgeMessage(msg *AgentMessage) error {
-	ack := map[string]interface{}{
+	ack := map[string]any{
 		"AcknowledgedMessageType":           msg.MessageType,
 		"AcknowledgedMessageId":             msg.messageID.String(),
 		"AcknowledgedMessageSequenceNumber": msg.SequenceNumber,
