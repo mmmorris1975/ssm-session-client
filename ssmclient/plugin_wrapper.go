@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/session-manager-plugin/src/datachannel"
 	"github.com/aws/session-manager-plugin/src/log"
+	"github.com/aws/session-manager-plugin/src/sdkutil"
 	"github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
@@ -32,6 +33,8 @@ func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
 	if input.Target == nil {
 		return errors.New("StartSession input missing Target")
 	}
+
+	sdkutil.SetRegionAndProfile(cfg.Region, "")
 
 	ssmSession := new(session.Session)
 	ssmSession.SessionId = *out.SessionId

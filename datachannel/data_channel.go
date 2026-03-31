@@ -234,7 +234,7 @@ func (c *SsmDataChannel) WriteMsg(msg *AgentMessage) (int, error) {
 		err = c.outMsgBuf.Add(msg)
 	}
 
-	if !c.pausePub {
+	if !c.pausePub || msg.MessageType == Acknowledge || msg.PayloadType == HandshakeResponse {
 		return int(msg.payloadLength), c.ws.WriteMessage(websocket.BinaryMessage, data)
 	}
 	return int(msg.payloadLength), err
@@ -273,8 +273,9 @@ func (c *SsmDataChannel) HandleMsg(data []byte) ([]byte, error) {
 				return m.Payload, nil
 			}
 
-			// duplicate message - discard
+			// duplicate message - re-ack and discard
 			if m.SequenceNumber < c.inSeqNum {
+				_ = c.sendAcknowledgeMessage(m)
 				return nil, nil
 			}
 
