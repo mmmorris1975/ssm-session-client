@@ -171,6 +171,18 @@ outer:
 // PortPluginSession delegates the execution of the SSM port forwarding to the AWS-managed session manager plugin code,
 // bypassing this libraries internal websocket code and connection management.
 func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
+	return PluginSession(cfg, portForwardingSessionInput(opts))
+}
+
+func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
+	c := new(datachannel.SsmDataChannel)
+	if err := c.Open(cfg, portForwardingSessionInput(opts)); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func portForwardingSessionInput(opts *PortForwardingInput) *ssm.StartSessionInput {
 	documentName := "AWS-StartPortForwardingSession"
 	parameters := map[string][]string{
 		"localPortNumber": {strconv.Itoa(opts.LocalPort)},
@@ -178,34 +190,15 @@ func PortPluginSession(cfg aws.Config, opts *PortForwardingInput) error {
 	}
 
 	if opts.Host != "" {
-		parameters["host"] = []string{opts.Host}
 		documentName = "AWS-StartPortForwardingSessionToRemoteHost"
+		parameters["host"] = []string{opts.Host}
 	}
 
-	in := &ssm.StartSessionInput{
+	return &ssm.StartSessionInput{
 		DocumentName: aws.String(documentName),
 		Target:       aws.String(opts.Target),
 		Parameters:   parameters,
 	}
-
-	return PluginSession(cfg, in)
-}
-
-func openDataChannel(cfg aws.Config, opts *PortForwardingInput) (*datachannel.SsmDataChannel, error) {
-	in := &ssm.StartSessionInput{
-		DocumentName: aws.String("AWS-StartPortForwardingSession"),
-		Target:       aws.String(opts.Target),
-		Parameters: map[string][]string{
-			"localPortNumber": {strconv.Itoa(opts.LocalPort)},
-			"portNumber":      {strconv.Itoa(opts.RemotePort)},
-		},
-	}
-
-	c := new(datachannel.SsmDataChannel)
-	if err := c.Open(cfg, in); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // read messages from websocket and write payload to the returned channel.
