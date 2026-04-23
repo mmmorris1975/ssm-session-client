@@ -1,3 +1,11 @@
+# v1.13.8 (2026-04-17)
+
+* **Dependency Update**: Bump smithy-go to 1.25.0 to support endpointBdd trait
+
+# v1.13.7 (2026-03-13)
+
+* **Bug Fix**: Replace usages of the old ioutil/ package throughout the SDK.
+
 # v1.13.6 (2026-03-03)
 
 * **Dependency Update**: Bump minimum Go version to 1.24
