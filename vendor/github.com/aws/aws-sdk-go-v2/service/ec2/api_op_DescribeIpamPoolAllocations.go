@@ -11,23 +11,34 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Get information about your IPAM scopes.
-func (c *Client) DescribeIpamScopes(ctx context.Context, params *DescribeIpamScopesInput, optFns ...func(*Options)) (*DescribeIpamScopesOutput, error) {
+// Describes IPAM pool allocations. You can describe all allocations owned by you
+// across all pools, or you can describe specific allocations by ID.
+//
+// If you specify IpamPoolAllocationIds , the results include only the specified
+// allocations. If you do not specify IpamPoolAllocationIds , the results include
+// all allocations owned by you. You can use Filters to narrow the results.
+//
+// This action returns only allocations directly owned by you. To view all
+// allocations in a pool you own or that has been shared with you, including
+// allocations owned by other accounts, use [GetIpamPoolAllocations].
+//
+// [GetIpamPoolAllocations]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetIpamPoolAllocations.html
+func (c *Client) DescribeIpamPoolAllocations(ctx context.Context, params *DescribeIpamPoolAllocationsInput, optFns ...func(*Options)) (*DescribeIpamPoolAllocationsOutput, error) {
 	if params == nil {
-		params = &DescribeIpamScopesInput{}
+		params = &DescribeIpamPoolAllocationsInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "DescribeIpamScopes", params, optFns, c.addOperationDescribeIpamScopesMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "DescribeIpamPoolAllocations", params, optFns, c.addOperationDescribeIpamPoolAllocationsMiddlewares)
 	if err != nil {
 		return nil, err
 	}
 
-	out := result.(*DescribeIpamScopesOutput)
+	out := result.(*DescribeIpamPoolAllocationsOutput)
 	out.ResultMetadata = metadata
 	return out, nil
 }
 
-type DescribeIpamScopesInput struct {
+type DescribeIpamPoolAllocationsInput struct {
 
 	// A check for whether you have the required permissions for the action without
 	// actually making the request and provides an error response. If you have the
@@ -40,8 +51,8 @@ type DescribeIpamScopesInput struct {
 	// [Filtering CLI output]: https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-filter.html
 	Filters []types.Filter
 
-	// The IDs of the scopes you want information on.
-	IpamScopeIds []string
+	// The IDs of the IPAM pool allocations you want to describe.
+	IpamPoolAllocationIds []string
 
 	// The maximum number of items to return for this request. To get the next page of
 	// items, make another request with the token returned in the output. For more
@@ -56,10 +67,10 @@ type DescribeIpamScopesInput struct {
 	noSmithyDocumentSerde
 }
 
-type DescribeIpamScopesOutput struct {
+type DescribeIpamPoolAllocationsOutput struct {
 
-	// The scopes you want information on.
-	IpamScopes []types.IpamScope
+	// Information about the IPAM pool allocations.
+	IpamPoolAllocations []types.IpamPoolAllocation
 
 	// The token to use to retrieve the next page of results. This value is null when
 	// there are no more results to return.
@@ -71,19 +82,19 @@ type DescribeIpamScopesOutput struct {
 	noSmithyDocumentSerde
 }
 
-func (c *Client) addOperationDescribeIpamScopesMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationDescribeIpamPoolAllocationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
 		return err
 	}
-	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeIpamScopes{}, middleware.After)
+	err = stack.Serialize.Add(&awsEc2query_serializeOpDescribeIpamPoolAllocations{}, middleware.After)
 	if err != nil {
 		return err
 	}
-	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeIpamScopes{}, middleware.After)
+	err = stack.Deserialize.Add(&awsEc2query_deserializeOpDescribeIpamPoolAllocations{}, middleware.After)
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeIpamScopes"); err != nil {
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeIpamPoolAllocations"); err != nil {
 		return fmt.Errorf("add protocol finalizers: %v", err)
 	}
 
@@ -135,7 +146,7 @@ func (c *Client) addOperationDescribeIpamScopesMiddlewares(stack *middleware.Sta
 	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeIpamScopes(options.Region), middleware.Before); err != nil {
+	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeIpamPoolAllocations(options.Region), middleware.Before); err != nil {
 		return err
 	}
 	if err = addRecursionDetection(stack); err != nil {
@@ -165,9 +176,9 @@ func (c *Client) addOperationDescribeIpamScopesMiddlewares(stack *middleware.Sta
 	return nil
 }
 
-// DescribeIpamScopesPaginatorOptions is the paginator options for
-// DescribeIpamScopes
-type DescribeIpamScopesPaginatorOptions struct {
+// DescribeIpamPoolAllocationsPaginatorOptions is the paginator options for
+// DescribeIpamPoolAllocations
+type DescribeIpamPoolAllocationsPaginatorOptions struct {
 	// The maximum number of items to return for this request. To get the next page of
 	// items, make another request with the token returned in the output. For more
 	// information, see [Pagination].
@@ -180,22 +191,24 @@ type DescribeIpamScopesPaginatorOptions struct {
 	StopOnDuplicateToken bool
 }
 
-// DescribeIpamScopesPaginator is a paginator for DescribeIpamScopes
-type DescribeIpamScopesPaginator struct {
-	options   DescribeIpamScopesPaginatorOptions
-	client    DescribeIpamScopesAPIClient
-	params    *DescribeIpamScopesInput
+// DescribeIpamPoolAllocationsPaginator is a paginator for
+// DescribeIpamPoolAllocations
+type DescribeIpamPoolAllocationsPaginator struct {
+	options   DescribeIpamPoolAllocationsPaginatorOptions
+	client    DescribeIpamPoolAllocationsAPIClient
+	params    *DescribeIpamPoolAllocationsInput
 	nextToken *string
 	firstPage bool
 }
 
-// NewDescribeIpamScopesPaginator returns a new DescribeIpamScopesPaginator
-func NewDescribeIpamScopesPaginator(client DescribeIpamScopesAPIClient, params *DescribeIpamScopesInput, optFns ...func(*DescribeIpamScopesPaginatorOptions)) *DescribeIpamScopesPaginator {
+// NewDescribeIpamPoolAllocationsPaginator returns a new
+// DescribeIpamPoolAllocationsPaginator
+func NewDescribeIpamPoolAllocationsPaginator(client DescribeIpamPoolAllocationsAPIClient, params *DescribeIpamPoolAllocationsInput, optFns ...func(*DescribeIpamPoolAllocationsPaginatorOptions)) *DescribeIpamPoolAllocationsPaginator {
 	if params == nil {
-		params = &DescribeIpamScopesInput{}
+		params = &DescribeIpamPoolAllocationsInput{}
 	}
 
-	options := DescribeIpamScopesPaginatorOptions{}
+	options := DescribeIpamPoolAllocationsPaginatorOptions{}
 	if params.MaxResults != nil {
 		options.Limit = *params.MaxResults
 	}
@@ -204,7 +217,7 @@ func NewDescribeIpamScopesPaginator(client DescribeIpamScopesAPIClient, params *
 		fn(&options)
 	}
 
-	return &DescribeIpamScopesPaginator{
+	return &DescribeIpamPoolAllocationsPaginator{
 		options:   options,
 		client:    client,
 		params:    params,
@@ -214,12 +227,12 @@ func NewDescribeIpamScopesPaginator(client DescribeIpamScopesAPIClient, params *
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
-func (p *DescribeIpamScopesPaginator) HasMorePages() bool {
+func (p *DescribeIpamPoolAllocationsPaginator) HasMorePages() bool {
 	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
-// NextPage retrieves the next DescribeIpamScopes page.
-func (p *DescribeIpamScopesPaginator) NextPage(ctx context.Context, optFns ...func(*Options)) (*DescribeIpamScopesOutput, error) {
+// NextPage retrieves the next DescribeIpamPoolAllocations page.
+func (p *DescribeIpamPoolAllocationsPaginator) NextPage(ctx context.Context, optFns ...func(*Options)) (*DescribeIpamPoolAllocationsOutput, error) {
 	if !p.HasMorePages() {
 		return nil, fmt.Errorf("no more pages available")
 	}
@@ -236,7 +249,7 @@ func (p *DescribeIpamScopesPaginator) NextPage(ctx context.Context, optFns ...fu
 	optFns = append([]func(*Options){
 		addIsPaginatorUserAgent,
 	}, optFns...)
-	result, err := p.client.DescribeIpamScopes(ctx, &params, optFns...)
+	result, err := p.client.DescribeIpamPoolAllocations(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
 	}
@@ -255,18 +268,18 @@ func (p *DescribeIpamScopesPaginator) NextPage(ctx context.Context, optFns ...fu
 	return result, nil
 }
 
-// DescribeIpamScopesAPIClient is a client that implements the DescribeIpamScopes
-// operation.
-type DescribeIpamScopesAPIClient interface {
-	DescribeIpamScopes(context.Context, *DescribeIpamScopesInput, ...func(*Options)) (*DescribeIpamScopesOutput, error)
+// DescribeIpamPoolAllocationsAPIClient is a client that implements the
+// DescribeIpamPoolAllocations operation.
+type DescribeIpamPoolAllocationsAPIClient interface {
+	DescribeIpamPoolAllocations(context.Context, *DescribeIpamPoolAllocationsInput, ...func(*Options)) (*DescribeIpamPoolAllocationsOutput, error)
 }
 
-var _ DescribeIpamScopesAPIClient = (*Client)(nil)
+var _ DescribeIpamPoolAllocationsAPIClient = (*Client)(nil)
 
-func newServiceMetadataMiddleware_opDescribeIpamScopes(region string) *awsmiddleware.RegisterServiceMetadata {
+func newServiceMetadataMiddleware_opDescribeIpamPoolAllocations(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		OperationName: "DescribeIpamScopes",
+		OperationName: "DescribeIpamPoolAllocations",
 	}
 }

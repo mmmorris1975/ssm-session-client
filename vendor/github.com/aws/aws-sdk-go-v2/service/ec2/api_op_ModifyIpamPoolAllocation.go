@@ -11,73 +11,49 @@ import (
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Modifies the connection options for your Site-to-Site VPN connection.
+// Modifies the description of an IPAM pool allocation. For more information, see [Modify an IPAM pool allocation]
+// in the Amazon VPC IPAM User Guide.
 //
-// When you modify the VPN connection options, the VPN endpoint IP addresses on
-// the Amazon Web Services side do not change, and the tunnel options do not
-// change. Your VPN connection will be temporarily unavailable for a brief period
-// while the VPN connection is updated.
-func (c *Client) ModifyVpnConnectionOptions(ctx context.Context, params *ModifyVpnConnectionOptionsInput, optFns ...func(*Options)) (*ModifyVpnConnectionOptionsOutput, error) {
+// [Modify an IPAM pool allocation]: https://docs.aws.amazon.com/vpc/latest/ipam/modify-alloc-ipam.html
+func (c *Client) ModifyIpamPoolAllocation(ctx context.Context, params *ModifyIpamPoolAllocationInput, optFns ...func(*Options)) (*ModifyIpamPoolAllocationOutput, error) {
 	if params == nil {
-		params = &ModifyVpnConnectionOptionsInput{}
+		params = &ModifyIpamPoolAllocationInput{}
 	}
 
-	result, metadata, err := c.invokeOperation(ctx, "ModifyVpnConnectionOptions", params, optFns, c.addOperationModifyVpnConnectionOptionsMiddlewares)
+	result, metadata, err := c.invokeOperation(ctx, "ModifyIpamPoolAllocation", params, optFns, c.addOperationModifyIpamPoolAllocationMiddlewares)
 	if err != nil {
 		return nil, err
 	}
 
-	out := result.(*ModifyVpnConnectionOptionsOutput)
+	out := result.(*ModifyIpamPoolAllocationOutput)
 	out.ResultMetadata = metadata
 	return out, nil
 }
 
-type ModifyVpnConnectionOptionsInput struct {
+type ModifyIpamPoolAllocationInput struct {
 
-	// The ID of the Site-to-Site VPN connection.
+	// The ID of the IPAM pool allocation you want to modify.
 	//
 	// This member is required.
-	VpnConnectionId *string
+	IpamPoolAllocationId *string
 
-	// Checks whether you have the required permissions for the action, without
-	// actually making the request, and provides an error response. If you have the
+	// The new description for the IPAM pool allocation. If you submit a null value,
+	// the description is removed from the allocation.
+	Description *string
+
+	// A check for whether you have the required permissions for the action without
+	// actually making the request and provides an error response. If you have the
 	// required permissions, the error response is DryRunOperation . Otherwise, it is
 	// UnauthorizedOperation .
 	DryRun *bool
 
-	// The IPv4 CIDR on the customer gateway (on-premises) side of the VPN connection.
-	//
-	// Default: 0.0.0.0/0
-	LocalIpv4NetworkCidr *string
-
-	// The IPv6 CIDR on the customer gateway (on-premises) side of the VPN connection.
-	//
-	// Default: ::/0
-	LocalIpv6NetworkCidr *string
-
-	// The IPv4 CIDR on the Amazon Web Services side of the VPN connection.
-	//
-	// Default: 0.0.0.0/0
-	RemoteIpv4NetworkCidr *string
-
-	// The IPv6 CIDR on the Amazon Web Services side of the VPN connection.
-	//
-	// Default: ::/0
-	RemoteIpv6NetworkCidr *string
-
-	// The desired bandwidth specification for the VPN connection. standard supports
-	// up to 1.25 Gbps per tunnel, while large supports up to 5 Gbps per tunnel. Large
-	// bandwidth is only available for VPN connections attached to a transit gateway or
-	// to Cloud WAN. The default value is standard .
-	TunnelBandwidth types.VpnTunnelBandwidth
-
 	noSmithyDocumentSerde
 }
 
-type ModifyVpnConnectionOptionsOutput struct {
+type ModifyIpamPoolAllocationOutput struct {
 
-	// Information about the VPN connection.
-	VpnConnection *types.VpnConnection
+	// The modified IPAM pool allocation.
+	IpamPoolAllocation *types.IpamPoolAllocation
 
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
@@ -85,19 +61,19 @@ type ModifyVpnConnectionOptionsOutput struct {
 	noSmithyDocumentSerde
 }
 
-func (c *Client) addOperationModifyVpnConnectionOptionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+func (c *Client) addOperationModifyIpamPoolAllocationMiddlewares(stack *middleware.Stack, options Options) (err error) {
 	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
 		return err
 	}
-	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyVpnConnectionOptions{}, middleware.After)
+	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyIpamPoolAllocation{}, middleware.After)
 	if err != nil {
 		return err
 	}
-	err = stack.Deserialize.Add(&awsEc2query_deserializeOpModifyVpnConnectionOptions{}, middleware.After)
+	err = stack.Deserialize.Add(&awsEc2query_deserializeOpModifyIpamPoolAllocation{}, middleware.After)
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyVpnConnectionOptions"); err != nil {
+	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyIpamPoolAllocation"); err != nil {
 		return fmt.Errorf("add protocol finalizers: %v", err)
 	}
 
@@ -149,10 +125,10 @@ func (c *Client) addOperationModifyVpnConnectionOptionsMiddlewares(stack *middle
 	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
-	if err = addOpModifyVpnConnectionOptionsValidationMiddleware(stack); err != nil {
+	if err = addOpModifyIpamPoolAllocationValidationMiddleware(stack); err != nil {
 		return err
 	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opModifyVpnConnectionOptions(options.Region), middleware.Before); err != nil {
+	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opModifyIpamPoolAllocation(options.Region), middleware.Before); err != nil {
 		return err
 	}
 	if err = addRecursionDetection(stack); err != nil {
@@ -182,10 +158,10 @@ func (c *Client) addOperationModifyVpnConnectionOptionsMiddlewares(stack *middle
 	return nil
 }
 
-func newServiceMetadataMiddleware_opModifyVpnConnectionOptions(region string) *awsmiddleware.RegisterServiceMetadata {
+func newServiceMetadataMiddleware_opModifyIpamPoolAllocation(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		OperationName: "ModifyVpnConnectionOptions",
+		OperationName: "ModifyIpamPoolAllocation",
 	}
 }
