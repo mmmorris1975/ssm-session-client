@@ -3,15 +3,16 @@ package ssmclient
 import (
 	"context"
 	"errors"
+	"os"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/session-manager-plugin/src/datachannel"
 	"github.com/aws/session-manager-plugin/src/log"
 	"github.com/aws/session-manager-plugin/src/sdkutil"
 	"github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/portsession"
 	_ "github.com/aws/session-manager-plugin/src/sessionmanagerplugin/session/shellsession"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/google/uuid"
 )
 
@@ -41,9 +42,13 @@ func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
 	ssmSession.StreamUrl = *out.StreamUrl
 	ssmSession.TokenValue = *out.TokenValue
 	ssmSession.Endpoint = ep.URL
+	ssmSession.Region = cfg.Region
 	ssmSession.ClientId = uuid.NewString()
 	ssmSession.TargetId = *input.Target
 	ssmSession.DataChannel = &datachannel.DataChannel{}
 
+	// Skip the plugin's internal credential lookup, since we've already done the requisite setup.
+	// The session token already provides auth.
+	os.Setenv("SSM_PLUGIN_SKIP_CLIENT_CONFIGURE", "true")
 	return ssmSession.Execute(log.Logger(false, ssmSession.ClientId))
 }
