@@ -15,14 +15,14 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 
-	sdkSession "github.com/aws/aws-sdk-go/aws/session"
-	v4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/session-manager-plugin/src/communicator"
 	"github.com/aws/session-manager-plugin/src/config"
 	"github.com/aws/session-manager-plugin/src/log"
@@ -54,15 +54,17 @@ func (s *Session) OpenDataChannel(log log.T) (err error) {
 
 		// Only attempt credential lookup if URL is not presigned
 		if !presigned {
-			sess, err := sdkutil.GetSessionWithQuickCheck(s.Endpoint)
+			ctx := context.Background()
+			cfg, err := sdkutil.GetConfigWithQuickCheck(ctx)
 			if err != nil {
-				log.Errorf("Failed to create aws session: %v", err)
+				log.Errorf("Failed to create aws config: %v", err)
 			} else {
-				_, err = sess.Config.Credentials.Get()
+				creds, err := cfg.Credentials.Retrieve(ctx)
 				if err != nil {
 					log.Errorf("Failed to get credential for sign: %v", err)
 				} else {
-					s.Signer = v4.NewSigner(sess.Config.Credentials)
+					s.Signer = v4.NewSigner()
+					s.Credentials = creds
 				}
 			}
 		} else {
@@ -73,7 +75,7 @@ func (s *Session) OpenDataChannel(log log.T) (err error) {
 	}
 
 	s.DataChannel.Initialize(log, s.ClientId, s.SessionId, s.TargetId, s.IsAwsCliUpgradeNeeded)
-	s.DataChannel.SetWebsocket(log, s.StreamUrl, s.TokenValue, s.Region, s.Signer)
+	s.DataChannel.SetWebsocket(log, s.StreamUrl, s.TokenValue, s.Region, s.Signer, s.Credentials)
 	s.DataChannel.GetWsChannel().SetOnMessage(
 		func(input []byte) {
 			s.DataChannel.OutputMessageHandler(log, s.Stop, s.SessionId, input)
@@ -127,12 +129,12 @@ func (s *Session) Stop() {
 }
 
 // GetResumeSessionParams calls ResumeSession API and gets tokenvalue for reconnecting
-func (s *Session) GetResumeSessionParams(log log.T) (string, error) {
+func (s *Session) GetResumeSessionParams(log log.T) (string, string, error) {
+	ctx := context.Background()
+
 	var (
 		resumeSessionOutput *ssm.ResumeSessionOutput
-		awsSession          *sdkSession.Session
 		err                 error
-		getCredErr          error
 	)
 
 	// Check if the StreamUrl is presigned first to avoid unnecessary credential lookup delay
@@ -143,43 +145,66 @@ func (s *Session) GetResumeSessionParams(log log.T) (string, error) {
 	}
 
 	// Only attempt credential lookup if URL is not presigned
-	// Use the same session for consistency to ensure same profile is used
 	if !presigned {
-		if awsSession, err = sdkutil.GetSessionWithQuickCheck(s.Endpoint); err != nil {
-			return "", err
+		cfg, err := sdkutil.GetConfigWithQuickCheck(ctx)
+		if err != nil {
+			return "", "", err
 		}
-		s.sdk = ssm.New(awsSession)
-		_, getCredErr = awsSession.Config.Credentials.Get()
+
+		var ssmOpts []func(*ssm.Options)
+		if s.Endpoint != "" {
+			endpoint := s.Endpoint
+			ssmOpts = append(ssmOpts, func(o *ssm.Options) {
+				o.BaseEndpoint = &endpoint
+			})
+		}
+		ssmClient := ssm.NewFromConfig(cfg, ssmOpts...)
+
+		// Update signer with fresh credentials
+		creds, getCredErr := cfg.Credentials.Retrieve(ctx)
 		if getCredErr != nil {
 			log.Errorf("Failed to get credential for sign")
 		} else {
-			s.Signer = v4.NewSigner(awsSession.Config.Credentials)
+			s.Signer = v4.NewSigner()
+			s.Credentials = creds
 		}
-	} else {
-		log.Debugf("StreamUrl is presigned, skipping resume session")
-		return "", errors.New("Skip resuming session with presigned URL")
+
+		resumeSessionInput := ssm.ResumeSessionInput{
+			SessionId: &s.SessionId,
+		}
+
+		log.Debugf("Resume Session input parameters: %v", resumeSessionInput)
+		if resumeSessionOutput, err = ssmClient.ResumeSession(ctx, &resumeSessionInput); err != nil {
+			log.Errorf("Resume Session failed: %v", err)
+			return "", "", err
+		}
+
+		if resumeSessionOutput.TokenValue == nil {
+			return "", "", nil
+		}
+
+		streamUrl := ""
+		if resumeSessionOutput.StreamUrl != nil {
+			streamUrl = *resumeSessionOutput.StreamUrl
+		}
+
+		return *resumeSessionOutput.TokenValue, streamUrl, nil
 	}
 
-	resumeSessionInput := ssm.ResumeSessionInput{
-		SessionId: &s.SessionId,
-	}
+	log.Debugf("StreamUrl is presigned, skipping resume session")
+	return "", "", errors.New("Skip resuming session with presigned URL")
+}
 
-	log.Debugf("Resume Session input parameters: %v", resumeSessionInput)
-	if resumeSessionOutput, err = s.sdk.ResumeSession(&resumeSessionInput); err != nil {
-		log.Errorf("Resume Session failed: %v", err)
-		return "", err
-	}
-
-	if resumeSessionOutput.TokenValue == nil {
-		return "", nil
-	}
-
-	return *resumeSessionOutput.TokenValue, nil
+// getResumeSessionParams is the function used by ResumeSessionHandler to get token and stream URL.
+// It is a variable to allow test injection.
+var getResumeSessionParams = func(s *Session, log log.T) (string, string, error) {
+	return s.GetResumeSessionParams(log)
 }
 
 // ResumeSessionHandler gets token value and tries to Reconnect to datachannel
 func (s *Session) ResumeSessionHandler(log log.T) (err error) {
-	s.TokenValue, err = s.GetResumeSessionParams(log)
+	var streamUrl string
+	s.TokenValue, streamUrl, err = getResumeSessionParams(s, log)
 	if err != nil {
 		log.Errorf("Failed to get token: %v", err)
 		return
@@ -189,29 +214,40 @@ func (s *Session) ResumeSessionHandler(log log.T) (err error) {
 		os.Exit(0)
 	}
 	s.DataChannel.GetWsChannel().SetChannelToken(s.TokenValue)
+	s.DataChannel.GetWsChannel().SetCredentials(s.Credentials)
+	if streamUrl != "" {
+		s.StreamUrl = streamUrl
+		s.DataChannel.GetWsChannel().SetStreamUrl(streamUrl)
+	}
 	err = s.DataChannel.Reconnect(log)
 	return
 }
 
 // TerminateSession calls TerminateSession API
 func (s *Session) TerminateSession(log log.T) error {
-	var (
-		err        error
-		newSession *sdkSession.Session
-	)
+	ctx := context.Background()
 
-	if newSession, err = sdkutil.GetSessionWithQuickCheck(s.Endpoint); err != nil {
+	cfg, err := sdkutil.GetConfigWithQuickCheck(ctx)
+	if err != nil {
 		log.Errorf("Terminate Session failed: %v", err)
 		return err
 	}
-	s.sdk = ssm.New(newSession)
+
+	var ssmOpts []func(*ssm.Options)
+	if s.Endpoint != "" {
+		endpoint := s.Endpoint
+		ssmOpts = append(ssmOpts, func(o *ssm.Options) {
+			o.BaseEndpoint = &endpoint
+		})
+	}
+	ssmClient := ssm.NewFromConfig(cfg, ssmOpts...)
 
 	terminateSessionInput := ssm.TerminateSessionInput{
 		SessionId: &s.SessionId,
 	}
 
 	log.Debugf("Terminate Session input parameters: %v", terminateSessionInput)
-	if _, err = s.sdk.TerminateSession(&terminateSessionInput); err != nil {
+	if _, err = ssmClient.TerminateSession(ctx, &terminateSessionInput); err != nil {
 		log.Errorf("Terminate Session failed: %v", err)
 		return err
 	}

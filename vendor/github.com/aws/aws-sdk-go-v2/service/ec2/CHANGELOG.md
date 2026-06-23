@@ -1,3 +1,50 @@
+# v1.308.0 (2026-06-22)
+
+* **Feature**: This release adds support for AMI Watermark and Allowed AMIs integration
+
+# v1.307.1 (2026-06-18)
+
+* **Documentation**: Documentation updates clarifying CancelCapacityReservation cancellable states
+
+# v1.307.0 (2026-06-10)
+
+* **Feature**: This release adds support for AMI Watermark which a structured identifier that helps in tracking AMI provenance
+
+# v1.306.0 (2026-06-09)
+
+* **Feature**: Added TagFieldSpecifications to CreateFlowLogs and DescribeFlowLogs APIs. Customers can now specify tag keys in their Flow Logs subscriptions to capture associated EC2 resource tag values in their logs, enabling tag-based visibility.
+
+# v1.305.3 (2026-06-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.305.2 (2026-06-04)
+
+* **Dependency Update**: Update to smithy-go v1.27.1 to fix several union-related deserialization bugs in schema-serde-enabled services.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.305.1 (2026-06-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.305.0 (2026-06-02)
+
+* **Feature**: Amazon EC2 now supports self-service cancellation of future-dated Capacity Reservations. A cancellation charge applies based on remaining commitment. Customers can generate a cancellation quote to review charges before confirming.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.304.2 (2026-05-29)
+
+* **Dependency Update**: Update to smithy-go v1.26.0.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.304.1 (2026-05-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.304.0 (2026-05-22)
+
+* **Feature**: The ModifyInstanceAttribute API now supports modification of EnclaveOptions for the instance as a typed parameter.
+
 # v1.303.0 (2026-05-18)
 
 * **Feature**: Amazon VPC IP Address Manager (IPAM) now supports tags on IPAM pool allocations, enabling all standard tagging features for allocations including tag-on-create.
