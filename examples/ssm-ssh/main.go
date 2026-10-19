@@ -31,7 +31,8 @@ func main() {
 		}
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func main() {
 		t = target
 	}
 
-	tgt, err := ssmclient.ResolveTarget(t, cfg)
+	tgt, err := ssmclient.ResolveTarget(ctx, t, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,6 +58,6 @@ func main() {
 		RemotePort: port,
 	}
 
-	// Alternatively, can be called as ssmclient.SSHPluginSession(cfg, tgt) to use the AWS-managed SSM session client code
-	log.Fatal(ssmclient.SSHSession(cfg, &in))
+	// Alternatively, can be called as ssmclient.SSHPluginSession(ctx, cfg, tgt) to use the AWS-managed SSM session client code
+	log.Fatal(ssmclient.SSHPluginSession(ctx, cfg, &in))
 }

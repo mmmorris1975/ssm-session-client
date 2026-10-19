@@ -29,17 +29,18 @@ func main() {
 		}
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	tgt, err := ssmclient.ResolveTarget(target, cfg)
+	tgt, err := ssmclient.ResolveTarget(ctx, target, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// A 3rd argument can be passed to specify a command to run before turning the shell over to the user
-	// Alternatively, can be called as ssmclient.ShellPluginSession(cfg, tgt) to use the AWS-managed SSM session client code
-	log.Fatal(ssmclient.ShellSession(cfg, tgt))
+	// Alternatively, can be called as ssmclient.ShellPluginSession(ctx, cfg, tgt) to use the AWS-managed SSM session client code
+	log.Fatal(ssmclient.ShellPluginSession(ctx, cfg, tgt))
 }

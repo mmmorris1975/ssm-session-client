@@ -16,8 +16,11 @@ import (
 	"github.com/google/uuid"
 )
 
-func PluginSession(cfg aws.Config, input *ssm.StartSessionInput) error {
-	out, err := ssm.NewFromConfig(cfg).StartSession(context.Background(), input)
+// PluginSession starts an SSM session and hands it off to the AWS-managed session manager plugin code.
+// The ctx only governs the setup performed here (the StartSession API call).  Once the plugin takes over,
+// it manages the session lifecycle and signal handling itself, and does not observe ctx cancellation.
+func PluginSession(ctx context.Context, cfg aws.Config, input *ssm.StartSessionInput) error {
+	out, err := ssm.NewFromConfig(cfg).StartSession(ctx, input)
 	if err != nil {
 		return err
 	}

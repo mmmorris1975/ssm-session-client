@@ -32,14 +32,15 @@ func main() {
 		}
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	parts := strings.Split(target, `:`)
 
-	tgt, err := ssmclient.ResolveTarget(strings.Join(parts[:len(parts)-1], `:`), cfg)
+	tgt, err := ssmclient.ResolveTarget(ctx, strings.Join(parts[:len(parts)-1], `:`), cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,5 +58,5 @@ func main() {
 	}
 
 	// Alternatively, can be called as ssmclient.PluginSession(cfg, tgt) to use the AWS-managed SSM session client code
-	log.Fatal(ssmclient.PortForwardingSession(cfg, &in))
+	log.Fatal(ssmclient.PortPluginSession(ctx, cfg, &in))
 }

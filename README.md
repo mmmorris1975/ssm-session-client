@@ -15,7 +15,7 @@ an AWS SDK client.ConfigProvider type (which can be satisfied with a session.Ses
 target to connect with.  For now, this client has only been tested on macOS and Linux, connecting to a Linux target.
 See the [example](examples/ssm-shell) for a simple implementation.
 
-Note: If you have enabled KMS encryption for Sessions, then use `ssmclient.ShellPluginSession()`.
+Note: If you have enabled KMS encryption for Sessions, then use `ssmclient.ShellPluginSession(ctx, ...)`.
 
 ## SSH
 SSH over SSM integration can be leveraged via the `ssmclient.SshSession()` function.  Since the SSM SSH integration is
@@ -37,15 +37,15 @@ the host and port number to connect with, and can be left as-is.
 
 ## Target Lookup Helpers
 A couple of helper functions are available to assist with looking up values for EC2 instance IDs.  The
-`ssmclient.ResolveTarget()` and `ssmclient.ResolveTargetChain()` functions can be used to find an instance ID
+`ssmclient.ResolveTarget(ctx, ...)` and `ssmclient.ResolveTargetChain(ctx, ...)` functions can be used to find an instance ID
 using friendlier, or better known identifying information for an instance.
 
-The `ssmclient.ResolveTarget()` function uses a predetermined lookup order to find an instance.  If provided with a
+The `ssmclient.ResolveTarget(ctx, ...)` function uses a predetermined lookup order to find an instance.  If provided with a
 non-nil AWS SDK client.ConfigProvider (which can be satisfied with a session.Session), instance tags, or the public
 or private IPv4 address (or a DNS lookup which resolves to one of those) of the instance, can be used.  If those
 avenues do not yield an instance ID, then a DNS TXT record lookup is performed.
 
-The `ssmclient.ResolveTargetChain()` function accepts a varargs list of types implementing the TargetResolver interface
+The `ssmclient.ResolveTargetChain(ctx, ...)` function accepts a varargs list of types implementing the TargetResolver interface
 to perform the instance ID resolution.  This allows custom resolution logic to be added in case the provided mechanisms
 prove insufficient.
 

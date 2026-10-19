@@ -31,27 +31,27 @@ var (
 
 // TargetResolver is the interface specification for something which knows how to resolve and EC2 instance identifier.
 type TargetResolver interface {
-	Resolve(string) (string, error)
+	Resolve(ctx context.Context, target string) (string, error)
 }
 
 // ResolveTarget attempts to find the instance ID of the target using a pre-defined resolution order.
 // The first check will see if the target is already in the format of an EC2 instance ID.  Next, if
 // the cfg parameter is not nil, checking by EC2 instance tags or private IPv4 IP address is performed.
 // Finally, resolving by DNS TXT record will be attempted.
-func ResolveTarget(target string, cfg aws.Config) (string, error) {
+func ResolveTarget(ctx context.Context, target string, cfg aws.Config) (string, error) {
 	resolvers := []TargetResolver{
 		NewTagResolver(cfg),
 		NewIPResolver(cfg),
 	}
 
-	return ResolveTargetChain(strings.TrimSpace(target), append(resolvers, NewDNSResolver())...)
+	return ResolveTargetChain(ctx, strings.TrimSpace(target), append(resolvers, NewDNSResolver())...)
 }
 
 // ResolveTargetChain attempts to find the instance ID of the target using the provided list of TargetResolvers.
 // The first check will always be to see if the target is already in the format of an EC2 instance ID before
 // moving on to the resolution logic of the provided TargetResolvers.  If a resolver returns an error, the next
 // resolver in the chain is checked.  If all resolvers fail to find an instance ID an error is returned.
-func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string, err error) {
+func ResolveTargetChain(ctx context.Context, target string, resolvers ...TargetResolver) (inst string, err error) {
 	var matched bool
 	matched, err = regexp.MatchString(`^m?i-[[:xdigit:]]{8,}$`, target)
 	if err != nil {
@@ -63,7 +63,10 @@ func ResolveTargetChain(target string, resolvers ...TargetResolver) (inst string
 	}
 
 	for _, res := range resolvers {
-		inst, err = res.Resolve(target)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
+		}
+		inst, err = res.Resolve(ctx, target)
 		if err != nil {
 			continue
 		}
@@ -94,8 +97,8 @@ func NewDNSResolver() *DNSResolver {
  */
 type DNSResolver bool
 
-func (r *DNSResolver) Resolve(target string) (string, error) {
-	rr, err := net.LookupTXT(strings.TrimSpace(target))
+func (r *DNSResolver) Resolve(ctx context.Context, target string) (string, error) {
+	rr, err := net.DefaultResolver.LookupTXT(ctx, strings.TrimSpace(target))
 	if err != nil {
 		return "", err
 	}
@@ -121,7 +124,7 @@ type TagResolver struct {
 	*EC2Resolver
 }
 
-func (r *TagResolver) Resolve(target string) (string, error) {
+func (r *TagResolver) Resolve(ctx context.Context, target string) (string, error) {
 	spec := strings.SplitN(strings.TrimSpace(target), `:`, 2)
 	if len(spec) < 2 {
 		return "", ErrInvalidTargetFormat
@@ -131,7 +134,7 @@ func (r *TagResolver) Resolve(target string) (string, error) {
 		Name:   aws.String(fmt.Sprintf(`tag:%s`, spec[0])),
 		Values: []string{spec[1]},
 	}
-	return r.EC2Resolver.Resolve(f)
+	return r.EC2Resolver.Resolve(ctx, f)
 }
 
 /*
@@ -145,7 +148,7 @@ type IPResolver struct {
 	*EC2Resolver
 }
 
-func (r *IPResolver) Resolve(target string) (string, error) {
+func (r *IPResolver) Resolve(ctx context.Context, target string) (string, error) {
 	var pubIP, privIP []string
 	var targets []net.IP
 
@@ -155,11 +158,14 @@ func (r *IPResolver) Resolve(target string) (string, error) {
 
 	if ip == nil {
 		// didn't look like an IP address, attempt DNS resolution ... maybe we'll find something there
-		addrs, err := net.LookupIP(trimmed)
+		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, trimmed)
 		if err != nil {
 			return "", ErrInvalidTargetFormat
 		}
-		targets = addrs
+		targets = make([]net.IP, 0, len(addrs))
+		for _, a := range addrs {
+			targets = append(targets, a.IP)
+		}
 	}
 
 	for _, t := range targets {
@@ -191,7 +197,7 @@ func (r *IPResolver) Resolve(target string) (string, error) {
 		f.Values = pubIP
 	}
 
-	return r.EC2Resolver.Resolve(f)
+	return r.EC2Resolver.Resolve(ctx, f)
 }
 
 func isPrivateAddr(addr net.IP) bool {
@@ -211,9 +217,9 @@ type EC2Resolver struct {
 	cfg aws.Config
 }
 
-func (r *EC2Resolver) Resolve(filter ...types.Filter) (string, error) {
+func (r *EC2Resolver) Resolve(ctx context.Context, filter ...types.Filter) (string, error) {
 	filter = append(filter, types.Filter{Name: aws.String("instance-state-name"), Values: []string{"running"}})
-	o, err := ec2.NewFromConfig(r.cfg).DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{Filters: filter})
+	o, err := ec2.NewFromConfig(r.cfg).DescribeInstances(ctx, &ec2.DescribeInstancesInput{Filters: filter})
 	if err != nil {
 		return "", err
 	}

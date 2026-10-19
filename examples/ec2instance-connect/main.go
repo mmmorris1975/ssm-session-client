@@ -14,20 +14,22 @@ import (
 
 // Start a SSH session. This program is meant to be configured as a ProxyCommand in the ssh_config file.
 // Usage: ec2instance-connect [profile] user@target_spec
-//   The profile_name argument is the name of profile in the local AWS configuration to use for credentials.
-//   If unset, it will consult the AWS_PROFILE environment variable, and if that is unset, will use credentials
-//   set via environment variables, or from the default profile.
 //
-//   The user parameter should be set as the user used to connect to the remote host.  This is required by the
-//   AWS API in order to provision the SSH public key for the connection.
+//	The profile_name argument is the name of profile in the local AWS configuration to use for credentials.
+//	If unset, it will consult the AWS_PROFILE environment variable, and if that is unset, will use credentials
+//	set via environment variables, or from the default profile.
 //
-//   The target_spec parameter is required, and is in the form of ec2_instance_id:port_number (ex: i-deadbeef:80)
+//	The user parameter should be set as the user used to connect to the remote host.  This is required by the
+//	AWS API in order to provision the SSH public key for the connection.
+//
+//	The target_spec parameter is required, and is in the form of ec2_instance_id:port_number (ex: i-deadbeef:80)
 //
 // Example ssh_config :
-//   Host i-*
-//     IdentityFile ~/.ssh/path_to_your_private_key
-//     ProxyCommand ec2instance-connect %r@%h:%p
-//     User ec2-user
+//
+//	Host i-*
+//	  IdentityFile ~/.ssh/path_to_your_private_key
+//	  ProxyCommand ec2instance-connect %r@%h:%p
+//	  User ec2-user
 func main() {
 	var profile string
 	target := os.Args[1]
@@ -41,7 +43,8 @@ func main() {
 		}
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithSharedConfigProfile(profile))
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithSharedConfigProfile(profile))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -58,7 +61,7 @@ func main() {
 		t = target
 	}
 
-	tgt, err := ssmclient.ResolveTarget(t, cfg)
+	tgt, err := ssmclient.ResolveTarget(ctx, t, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,7 +72,7 @@ func main() {
 		InstanceOSUser: aws.String(userHost[0]),
 		SSHPublicKey:   aws.String(""), // FIXME - load your SSH public key here
 	}
-	if _, err = ec2i.SendSSHPublicKey(context.Background(), &pubkeyIn); err != nil {
+	if _, err = ec2i.SendSSHPublicKey(ctx, &pubkeyIn); err != nil {
 		log.Fatal(err)
 	}
 
@@ -78,6 +81,6 @@ func main() {
 		RemotePort: port,
 	}
 
-	// Alternatively, can be called as ssmclient.SSHPluginSession(cfg, tgt) to use the AWS-managed SSM session client code
-	log.Fatal(ssmclient.SSHSession(cfg, &in))
+	// Alternatively, can be called as ssmclient.SSHPluginSession(ctx, cfg, tgt) to use the AWS-managed SSM session client code
+	log.Fatal(ssmclient.SSHPluginSession(ctx, cfg, &in))
 }
